@@ -12,6 +12,15 @@ export class GameSession {
     this.state = createInitialGame(quiz);
   }
 
+  /**
+   * Host quiz selection: reset to a fresh lobby for the new quiz while keeping
+   * already-joined players (they keep their slot; scores/answers reset with
+   * the fresh state). Non-destructive: nobody has to re-join or re-scan.
+   */
+  loadQuiz(quiz: Quiz): void {
+    this.state = { ...createInitialGame(quiz), players: [...this.state.players] };
+  }
+
   get current(): GameState {
     return this.state;
   }

@@ -191,6 +191,84 @@ startButton.addEventListener('click', () => {
   socket.emit('hostStart');
 });
 
+// ---- Host quiz picker: list / select / import / export ---------------------
+
+const quizSelect = document.getElementById('quiz-select');
+const quizExportLink = document.getElementById('quiz-export');
+const quizImportInput = document.getElementById('quiz-import');
+const quizStatus = document.getElementById('quiz-status');
+
+let quizzes = [];
+
+async function refreshQuizzes() {
+  try {
+    const res = await fetch('/api/quizzes');
+    if (!res.ok) throw new Error(`quizzes API returned ${res.status}`);
+    quizzes = await res.json();
+    quizSelect.replaceChildren(
+      ...quizzes.map((quiz) => {
+        const option = document.createElement('option');
+        option.value = quiz.id;
+        option.textContent = `${quiz.title} (${quiz.questionCount} questions)`;
+        return option;
+      }),
+    );
+    quizSelect.selectedIndex = 0;
+  } catch (err) {
+    quizStatus.textContent = `Failed to list quizzes: ${err.message}`;
+  }
+}
+
+const selectedQuiz = () => quizzes.find((quiz) => quiz.id === quizSelect.value);
+
+// Selecting a quiz loads it into the live lobby; already-joined players are
+// kept by the server, and the next "state" broadcast reflects the new quiz.
+quizSelect.addEventListener('change', async () => {
+  const quiz = selectedQuiz();
+  if (!quiz) return;
+  quizExportLink.hidden = true;
+  try {
+    const res = await fetch('/api/game/quiz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quizId: quiz.id }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? `quiz API returned ${res.status}`);
+    quizStatus.textContent = `Loaded quiz: ${body.title} (${body.questionCount} questions)`;
+    if (selectedQuiz()) {
+      quizExportLink.href = `/api/quizzes/${encodeURIComponent(quiz.id)}/export`;
+      quizExportLink.textContent = `Export "${quiz.title}"`;
+      quizExportLink.hidden = false;
+    }
+  } catch (err) {
+    quizStatus.textContent = `Failed to load quiz: ${err.message}`;
+  }
+});
+
+quizImportInput.addEventListener('change', async () => {
+  const file = quizImportInput.files?.[0];
+  quizImportInput.value = '';
+  if (!file) return;
+  try {
+    const res = await fetch('/api/quizzes/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await file.text(),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      throw new Error(body.errors?.join('; ') ?? body.error ?? `import API returned ${res.status}`);
+    }
+    quizStatus.textContent = `Imported quiz: ${body.title}`;
+    await refreshQuizzes();
+  } catch (err) {
+    quizStatus.textContent = `Import failed: ${err.message}`;
+  }
+});
+
+refreshQuizzes();
+
 revealButton.addEventListener('click', () => {
   revealButton.disabled = true;
   socket.emit('reveal');

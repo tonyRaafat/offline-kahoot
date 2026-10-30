@@ -24,6 +24,19 @@
       <p class="label">Players <span id="player-count"></span></p>
       <ul id="players" class="players"></ul>
 
+      <p class="label">Quiz</p>
+      <p>
+        <select id="quiz-select" class="quiz-select">
+          <option value="" disabled selected>Choose a quiz…</option>
+        </select>
+      </p>
+      <p id="quiz-status" class="status"></p>
+      <p>
+        <a id="quiz-export" href="#" download hidden>Export selected quiz</a>
+        <label for="quiz-import" class="label-inline">Import quiz</label>
+        <input type="file" id="quiz-import" accept=".json,application/json" hidden />
+      </p>
+
       <button id="start" class="player-button" disabled>Start game</button>
     </main>
 
