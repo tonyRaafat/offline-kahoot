@@ -20,8 +20,12 @@
 
       <p class="label">Scan to join</p>
       <img id="qr" class="qr" alt="QR code with the join URL" hidden />
+
+      <p class="label">Players <span id="player-count"></span></p>
+      <ul id="players" class="players"></ul>
     </main>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script src="/host.js" type="module"></script>
   </body>
 </html>

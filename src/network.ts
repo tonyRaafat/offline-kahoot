@@ -1,7 +1,6 @@
 import { exec } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
 import { promisify } from 'node:util';
-import type { Express } from 'express';
 import { connect } from 'node:net';
 import type { Server } from 'node:http';
 
@@ -103,27 +102,33 @@ export async function detectLanIp(platform: NodeJS.Platform): Promise<string | n
 }
 
 /**
- * Accepts an Express app on the first free port at or above `initialPort`,
+ * Listens an http.Server on the first free port at or above `initialPort`,
  * retrying with port + 1 while the OS reports EADDRINUSE.
+ *
+ * Takes an http.Server (not an Express app) so callers can attach extra
+ * transports — socket.io — to the same server before it ever listens.
  */
 export function listenOnFreePort(
-  app: Express,
+  server: Server,
   initialPort: number,
   maxRetries: number,
   onListening: (port: number) => void,
   onError: (err: NodeJS.ErrnoException, port: number) => void,
 ): Server {
-  const tryListen = (port: number): Server => {
-    const server = app.listen(port) as Server;
-    server.on('listening', () => onListening(port));
-    server.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE' && port < initialPort + maxRetries) {
-        server.close(() => tryListen(port + 1));
-      } else {
-        onError(err, port);
-      }
-    });
-    return server;
-  };
-  return tryListen(initialPort);
+  const lastPort = initialPort + maxRetries;
+  let port = initialPort;
+  // Single long-lived listener pair: the same server instance is re-listened
+  // on each fallback port, so per-attempt listeners would accumulate.
+  server.on('listening', () => onListening(port));
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE' && port < lastPort) {
+      const nextPort = port + 1;
+      port = nextPort;
+      server.close(() => server.listen(nextPort));
+    } else {
+      onError(err, port);
+    }
+  });
+  server.listen(port);
+  return server;
 }

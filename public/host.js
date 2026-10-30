@@ -21,3 +21,19 @@ async function showSession() {
 }
 
 showSession();
+
+// Live lobby roster: the server pushes a StateView on every engine state
+// change; the player list re-renders from it.
+const rosterEl = document.getElementById('players');
+const playerCountEl = document.getElementById('player-count');
+const socket = io();
+socket.on('state', (view) => {
+  playerCountEl.textContent = view.players.length > 0 ? ` (${view.players.length})` : '';
+  rosterEl.replaceChildren(
+    ...view.players.map((player) => {
+      const li = document.createElement('li');
+      li.textContent = player.name;
+      return li;
+    }),
+  );
+});

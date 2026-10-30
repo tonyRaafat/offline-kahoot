@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { extractIpv4Address, formatJoinUrl, isPortReachable } from './network.js';
+import { extractIpv4Address, formatJoinUrl, isPortReachable, listenOnFreePort } from './network.js';
 
 describe('formatJoinUrl', () => {
   it('formats ip and port as "http://<ip>:<port>"', () => {
@@ -88,5 +88,67 @@ describe('isPortReachable', () => {
 
   it('reports unreachable for a closed port', async () => {
     await expect(isPortReachable('127.0.0.1', 1)).resolves.toBe(false);
+  });
+});
+
+describe('listenOnFreePort', () => {
+  const closables: ReturnType<typeof createServer>[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      closables.splice(0).map(
+        (server) => new Promise<void>((resolve) => server.close(() => resolve())),
+      ),
+    );
+  });
+
+  it('falls back to the next port when the initial one reports EADDRINUSE', async () => {
+    const blocker = createServer(() => {});
+    await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));
+    const busyPort = (blocker.address() as AddressInfo).port;
+    closables.push(blocker);
+
+    const server = createServer(() => {});
+    closables.push(server);
+    const listening = new Promise<number>((resolve, reject) =>
+      listenOnFreePort(
+        server,
+        busyPort,
+        3,
+        (port) => resolve(port),
+        (err) => reject(err),
+      ),
+    );
+
+    await expect(listening).resolves.toBe(busyPort + 1);
+  });
+
+  it('gives up after maxRetries and reports the error with the last tried port', async () => {
+    const blockerA = createServer(() => {});
+    await new Promise<void>((resolve) => blockerA.listen(0, '127.0.0.1', resolve));
+    const busyPort = (blockerA.address() as AddressInfo).port;
+    const blockerB = createServer(() => {});
+    await new Promise<void>((resolve) => blockerB.listen(busyPort + 1, '127.0.0.1', resolve));
+    closables.push(blockerA, blockerB);
+
+    const server = createServer(() => {});
+    closables.push(server);
+    let reportError: ((err: NodeJS.ErrnoException) => void) | undefined;
+    const failed = new Promise<NodeJS.ErrnoException & { reportedPort?: number }>(
+      (resolve) => (reportError = resolve),
+    );
+    listenOnFreePort(
+      server,
+      busyPort,
+      1,
+      () => {
+        throw new Error('must not report listening while both ports are busy');
+      },
+      (err, port) => reportError?.(Object.assign(err, { reportedPort: port })),
+    );
+
+    const err = await failed;
+    expect(err.code).toBe('EADDRINUSE');
+    expect(err.reportedPort).toBe(busyPort + 1);
   });
 });

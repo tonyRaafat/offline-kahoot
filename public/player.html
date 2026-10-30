@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline Kahoot — Join</title>
+    <link rel="stylesheet" href="/host.css" />
+  </head>
+  <body>
+    <main class="card" id="entering">
+      <h1>Join the game</h1>
+
+      <p id="status" class="status" role="status"></p>
+
+      <p class="label"><label for="pin">Game PIN</label></p>
+      <p>
+        <input
+          id="pin"
+          class="player-input"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="6"
+          placeholder="000000"
+        />
+      </p>
+
+      <p class="label"><label for="name">Nickname</label></p>
+      <p>
+        <input
+          id="name"
+          class="player-input"
+          autocomplete="off"
+          maxlength="20"
+          placeholder="Nickname"
+        />
+      </p>
+
+      <p><button id="join" class="player-button">Join</button></p>
+    </main>
+
+    <main class="card" id="lobby" hidden>
+      <h1>You're in!</h1>
+      <p class="label">Playing as</p>
+      <p id="final-name" class="pin"></p>
+      <p id="waiting" class="label">Waiting for the host to start…</p>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/player.js" type="module"></script>
+  </body>
+</html>

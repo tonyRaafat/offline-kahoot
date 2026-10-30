@@ -54,3 +54,42 @@ h1 {
   padding: 0.5rem;
   border-radius: 0.5rem;
 }
+
+.players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: #1affb0;
+  font-size: 1.2rem;
+}
+
+.players li {
+  padding: 0.2rem 0;
+}
+
+.player-input,
+.player-button {
+  font: inherit;
+}
+
+.player-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid #b8a8dd;
+  background: #2b1e50;
+  color: #fff;
+  text-align: center;
+}
+
+.player-button {
+  width: 100%;
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #1affb0;
+  color: #143529;
+  font-weight: 700;
+  cursor: pointer;
+}
