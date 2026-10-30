@@ -10,7 +10,9 @@
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:exe": "node scripts/build.mjs",
+    "test:exe": "node scripts/build.mjs && node scripts/smoke-exe.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -21,6 +23,8 @@
     "@types/express": "^5.0.4",
     "@types/node": "^24.10.1",
     "@types/qrcode": "^1.5.5",
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6",
     "socket.io-client": "^4.8.4",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",

@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getAsset } from 'node:sea';
 import QRCode from 'qrcode';
 import { Server } from 'socket.io';
 import { GameSession } from './game-session.js';
@@ -12,6 +13,7 @@ import { detectLanIp, formatJoinUrl, isPortReachable, listenOnFreePort } from '.
 import {
   deleteQuizFile,
   exportQuiz,
+  importQuiz,
   listQuizzes,
   newQuizFilePath,
   readQuizFile,
@@ -19,32 +21,93 @@ import {
   writeQuizFile,
 } from './storage.js';
 import { stateView } from './state-view.js';
+import {
+  dataRootBesideExecutable,
+  isRunningAsSea,
+  publicPathToAssetKey,
+  SEA_SEED_ASSET_KEY,
+} from './sea-assets.js';
 import type { Quiz } from './engine.js';
 
 const DEFAULT_PORT = 3000;
 const PORT_MAX_RETRIES = 9; // 3000..3009 per "default port 3000, auto-increment if busy"
 const LOG_PREFIX = '[offline-kahoot]';
 
+/** True when serving from the standalone Node SEA bundle (scripts/build.mjs). */
+const RUNNING_AS_SEA = isRunningAsSea();
+
 const app = express();
 // One http server hosts both the HTTP routes and socket.io, so players join
 // over the same host/port the QR code points at.
 const httpServer = createServer(app);
-const here = path.dirname(fileURLToPath(import.meta.url));
+// Base dir for filesystem mode. `import.meta.url` survives tsx/ESM but is
+// shimmed away by esbuild in the SEA CJS bundle, where the executable location
+// is the only meaningful anchor.
+const here =
+  typeof import.meta.url === 'string'
+    ? path.dirname(fileURLToPath(import.meta.url))
+    : path.dirname(process.execPath);
+const PUBLIC_DIR = path.join(here, '..', 'public');
 
 app.use(express.json());
-app.use(express.static(path.join(here, '..', 'public')));
+if (RUNNING_AS_SEA) {
+  // Standalone bundle: there is no public/ directory on disk; serve exactly
+  // the asset keys baked in at build time (see src/sea-assets.ts). Anything
+  // else — including API routes — falls through to the JSON handlers below.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      next();
+      return;
+    }
+    let pathname = req.path;
+    try {
+      pathname = decodeURIComponent(req.path);
+    } catch {
+      // malformed escape sequence — resolves to no key below
+    }
+    const key = publicPathToAssetKey(pathname);
+    if (!key) {
+      next();
+      return;
+    }
+    try {
+      res.type(key).send(getAsset(key, 'utf8'));
+    } catch {
+      next();
+    }
+  });
+} else {
+  app.use(express.static(PUBLIC_DIR));
+}
 
 app.get('/', (_req, res) => {
-  res.sendFile(path.join(here, '..', 'public', 'host.html'));
+  sendPage(res, 'host.html');
 });
 
 app.get('/play', (_req, res) => {
-  res.sendFile(path.join(here, '..', 'public', 'player.html'));
+  sendPage(res, 'player.html');
 });
 
 app.get('/editor', (_req, res) => {
-  res.sendFile(path.join(here, '..', 'public', 'editor.html'));
+  sendPage(res, 'editor.html');
 });
+
+/** Serves one app page from the embedded assets (SEA) or public/ (npm start). */
+function sendPage(
+  res: express.Response,
+  pageFile: 'host.html' | 'player.html' | 'editor.html',
+): void {
+  if (RUNNING_AS_SEA) {
+    const key = publicPathToAssetKey(`/${pageFile}`);
+    if (!key) {
+      res.status(404).end();
+      return;
+    }
+    res.type(key).send(getAsset(key, 'utf8'));
+    return;
+  }
+  res.sendFile(path.join(PUBLIC_DIR, pageFile));
+}
 
 /** Quiz ids are filenames; reject anything that could escape data/quizzes/. */
 function isSafeQuizId(id: unknown): id is string {
@@ -222,18 +285,48 @@ function session(): { pin: string; joinUrl: string; qrDataUrl: string } | null {
   return (app.locals.session as { pin: string; joinUrl: string; qrDataUrl: string } | null) ?? null;
 }
 
-// Quiz files live in data/quizzes/, one JSON file per quiz; seed.json ships
-// with the project and is the quiz loaded at boot.
-const QUIZZES_DIR = path.join(here, '..', 'data', 'quizzes');
+// Quiz files live in data/quizzes/, one JSON file per quiz. In the standalone
+// bundle everything read-only (pages, seed quiz) is INSIDE the executable,
+// while runtime-writable data goes beside the executable — the bundle itself
+// must never be written to. npm-start mode keeps the project data/ location.
+const DATA_ROOT = RUNNING_AS_SEA
+  ? dataRootBesideExecutable(process.execPath)
+  : path.join(here, '..', 'data');
+const QUIZZES_DIR = path.join(DATA_ROOT, 'quizzes');
 const SEED_QUIZ_PATH = path.join(QUIZZES_DIR, 'seed.json');
 /** Finished-game results go to data/results/YYYY-MM-DD_HHmm.json (see CONTEXT.md). */
-const RESULTS_DIR = path.join(here, '..', 'data', 'results');
+const RESULTS_DIR = path.join(DATA_ROOT, 'results');
 /** Fallback when storage is unavailable at boot: a game that simply cannot start. */
 const FALLBACK_QUIZ: Quiz = { title: 'Untitled Quiz', questions: [] };
 
 async function bootQuiz(): Promise<Quiz> {
+  if (!RUNNING_AS_SEA) {
+    try {
+      return await readQuizFile(SEED_QUIZ_PATH);
+    } catch (err) {
+      console.warn(`${LOG_PREFIX} seed quiz unavailable (${
+        err instanceof Error ? err.message : String(err)
+      }); starting with an empty quiz`);
+      return FALLBACK_QUIZ;
+    }
+  }
+  // SEA: the seed quiz ships as an embedded asset. First run materializes it
+  // beside the executable so the editor lists/edits/deletes it like any other
+  // quiz; an existing (possibly edited) copy is never overwritten.
   try {
     return await readQuizFile(SEED_QUIZ_PATH);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(`${LOG_PREFIX} seed quiz unavailable (${
+        err instanceof Error ? err.message : String(err)
+      }); starting with an empty quiz`);
+      return FALLBACK_QUIZ;
+    }
+  }
+  try {
+    const seed = parseEmbeddedSeedQuiz();
+    await writeQuizFile(SEED_QUIZ_PATH, seed);
+    return seed;
   } catch (err) {
     console.warn(`${LOG_PREFIX} seed quiz unavailable (${
       err instanceof Error ? err.message : String(err)
@@ -242,52 +335,71 @@ async function bootQuiz(): Promise<Quiz> {
   }
 }
 
-// The one live session for this server process, seeded from data/quizzes/seed.json.
-const gameSession = new GameSession(await bootQuiz());
-
-const pin = generatePin();
-const io = new Server(httpServer);
-wireSockets(io, {
-  gameSession,
-  sessionPin: pin,
-  results: new GameResultsRecorder(RESULTS_DIR),
-});
-const lanIp = await detectLanIp(process.platform);
-if (!lanIp) {
-  console.warn(`${LOG_PREFIX} could not detect a LAN IP; players may need the host's address manually`);
+/** Parses the embedded seed asset with the same strict validation as import. */
+function parseEmbeddedSeedQuiz(): Quiz {
+  const result = importQuiz(getAsset(SEA_SEED_ASSET_KEY, 'utf8'));
+  if (!result.ok) {
+    throw new Error(`embedded seed quiz invalid: ${result.errors.join('; ')}`);
+  }
+  return result.quiz;
 }
-const hostIp = lanIp ?? '127.0.0.1';
 
-listenOnFreePort(
-  httpServer,
-  DEFAULT_PORT,
-  PORT_MAX_RETRIES,
-  async (port) => {
-    const joinUrl = formatJoinUrl(hostIp, port);
-    app.locals.session = {
-      pin,
-      joinUrl,
-      qrDataUrl: await QRCode.toDataURL(joinUrl),
-    };
+// Assigned in main() BEFORE the server starts listening, so the handlers
+// registered above can never run against an unset session.
+let gameSession!: GameSession;
+let io!: Server;
 
-    const reachable = await isPortReachable(hostIp, port);
-    console.log(`${LOG_PREFIX} host page: ${joinUrl}`);
-    console.log(`${LOG_PREFIX} session PIN: ${pin}`);
-    console.log(
-      reachable
-        ? `${LOG_PREFIX} port self-test PASS: ${hostIp}:${port} is reachable`
-        : `${LOG_PREFIX} port self-test FAIL: ${hostIp}:${port} is NOT reachable — check firewall/host isolation`,
-    );
-  },
-  (err, port) => {
-    console.error(
-      err.code === 'EADDRINUSE'
-        ? `${LOG_PREFIX} no free port found between ${DEFAULT_PORT} and ${port}`
-        : `${LOG_PREFIX} failed to listen on port ${port}: ${err.message}`,
-    );
-    process.exit(1);
-  },
-);
+/** Boot of the live session + stream wiring + listening; no top-level await,
+ *  so the SEA bundle can ship this module as CommonJS (SEA requires it). */
+async function main(): Promise<void> {
+  // The one live session for this server process, seeded from data/quizzes/seed.json.
+  gameSession = new GameSession(await bootQuiz());
+
+  const pin = generatePin();
+  io = new Server(httpServer);
+  wireSockets(io, {
+    gameSession,
+    sessionPin: pin,
+    results: new GameResultsRecorder(RESULTS_DIR),
+  });
+  const lanIp = await detectLanIp(process.platform);
+  if (!lanIp) {
+    console.warn(`${LOG_PREFIX} could not detect a LAN IP; players may need the host's address manually`);
+  }
+  const hostIp = lanIp ?? '127.0.0.1';
+
+  listenOnFreePort(
+    httpServer,
+    DEFAULT_PORT,
+    PORT_MAX_RETRIES,
+    async (port) => {
+      const joinUrl = formatJoinUrl(hostIp, port);
+      app.locals.session = {
+        pin,
+        joinUrl,
+        qrDataUrl: await QRCode.toDataURL(joinUrl),
+      };
+
+      const reachable = await isPortReachable(hostIp, port);
+      console.log(`${LOG_PREFIX} host page: ${joinUrl}`);
+      console.log(`${LOG_PREFIX} session PIN: ${pin}`);
+      console.log(
+        reachable
+          ? `${LOG_PREFIX} port self-test PASS: ${hostIp}:${port} is reachable`
+          : `${LOG_PREFIX} port self-test FAIL: ${hostIp}:${port} is NOT reachable — check firewall/host isolation`,
+      );
+    },
+    (err, port) => {
+      console.error(
+        err.code === 'EADDRINUSE'
+          ? `${LOG_PREFIX} no free port found between ${DEFAULT_PORT} and ${port}`
+          : `${LOG_PREFIX} failed to listen on port ${port}: ${err.message}`,
+      );
+      process.exit(1);
+    },
+  );
+}
+main();
 
 // Unhandled promise rejections would mask the boot logs above; surface them loudly.
 process.on('unhandledRejection', (reason) => {
