@@ -50,6 +50,7 @@ const correctAnswerEl = document.getElementById('correct-answer');
 const correctPlayersEl = document.getElementById('correct-players');
 const leaderboardEl = document.getElementById('leaderboard');
 const podiumEl = document.getElementById('podium');
+const endGameButton = document.getElementById('end-game');
 
 const socket = io();
 
@@ -280,4 +281,10 @@ nextButton.addEventListener('click', () => {
 
 leaderboardNextButton.addEventListener('click', () => {
   socket.emit('next');
+});
+
+// Back to lobby: asks the server to dispatch the engine's `end` event — the
+// roster is kept, scores reset, and the results of the finished game are saved.
+endGameButton.addEventListener('click', () => {
+  socket.emit('endGame');
 });

@@ -7,6 +7,7 @@ import { Server } from 'socket.io';
 import { GameSession } from './game-session.js';
 import { wireSockets } from './socket.js';
 import { generatePin } from './pin.js';
+import { GameResultsRecorder } from './results.js';
 import { detectLanIp, formatJoinUrl, isPortReachable, listenOnFreePort } from './network.js';
 import {
   deleteQuizFile,
@@ -225,6 +226,8 @@ function session(): { pin: string; joinUrl: string; qrDataUrl: string } | null {
 // with the project and is the quiz loaded at boot.
 const QUIZZES_DIR = path.join(here, '..', 'data', 'quizzes');
 const SEED_QUIZ_PATH = path.join(QUIZZES_DIR, 'seed.json');
+/** Finished-game results go to data/results/YYYY-MM-DD_HHmm.json (see CONTEXT.md). */
+const RESULTS_DIR = path.join(here, '..', 'data', 'results');
 /** Fallback when storage is unavailable at boot: a game that simply cannot start. */
 const FALLBACK_QUIZ: Quiz = { title: 'Untitled Quiz', questions: [] };
 
@@ -244,7 +247,11 @@ const gameSession = new GameSession(await bootQuiz());
 
 const pin = generatePin();
 const io = new Server(httpServer);
-wireSockets(io, { gameSession, sessionPin: pin });
+wireSockets(io, {
+  gameSession,
+  sessionPin: pin,
+  results: new GameResultsRecorder(RESULTS_DIR),
+});
 const lanIp = await detectLanIp(process.platform);
 if (!lanIp) {
   console.warn(`${LOG_PREFIX} could not detect a LAN IP; players may need the host's address manually`);

@@ -15,6 +15,8 @@
 //     `answer` { answerIndex }   the joined player's answer for the live question
 //     `reveal` (no payload)      host only: question -> reveal
 //     `next` (no payload)        host only: reveal -> leaderboard -> next question / podium
+//     `endGame` (no payload)     host only: any live phase -> lobby (players kept,
+//                                scores cleared); results of the live game are saved
 //   server -> socket:
 //     `joined` { playerId, name }   name = FINAL name after duplicate
 //                                    auto-suffixing, followed by `state`
@@ -30,10 +32,13 @@ import type { Effect } from './engine.js';
 import type { GameSession } from './game-session.js';
 import { parseJoinPayload, toPlayerJoinEvent } from './join.js';
 import { stateView } from './state-view.js';
+import { type GameResultsRecorder } from './results.js';
 
 export interface SocketWiring {
   gameSession: GameSession;
   sessionPin: string;
+  /** Results accumulator for finished games; omitted only in minimal test boots. */
+  results?: GameResultsRecorder;
 }
 
 export function wireSockets(io: Server, wiring: SocketWiring): void {
@@ -46,6 +51,7 @@ export function wireSockets(io: Server, wiring: SocketWiring): void {
     socket.on('answer', (raw: unknown) => handleAnswer(io, wiring, socket, raw));
     socket.on('reveal', () => handleHostEvent(io, wiring, socket, 'reveal'));
     socket.on('next', () => handleHostEvent(io, wiring, socket, 'next'));
+    socket.on('endGame', () => handleEndGame(io, wiring, socket));
   });
 }
 
@@ -54,14 +60,16 @@ export function wireSockets(io: Server, wiring: SocketWiring): void {
  * stateView() and pushed to every socket, broadcastReveal goes to every socket
  * as-is, and answerRejected goes back to the socket of the submitting player.
  */
-function broadcastEffects(io: Server, source: Socket, effects: Effect[]): void {
+function broadcastEffects(io: Server, source: Socket, wiring: SocketWiring, effects: Effect[]): void {
   for (const effect of effects) {
     switch (effect.type) {
       case 'broadcastState':
         io.emit('state', stateView(effect.state));
+        wiring.results?.onState(effect.state);
         break;
       case 'broadcastReveal':
         io.emit('reveal', effect.reveal);
+        wiring.results?.addReveal(effect.reveal);
         break;
       case 'answerRejected':
         source.emit('answerRejected', { reason: effect.reason });
@@ -77,7 +85,18 @@ function isHost(socket: Socket): boolean {
 
 function handleHostStart(io: Server, wiring: SocketWiring, socket: Socket): void {
   if (!isHost(socket)) return;
-  broadcastEffects(io, socket, wiring.gameSession.dispatch({ type: 'startQuiz', atMs: Date.now() }));
+  broadcastEffects(io, socket, wiring, wiring.gameSession.dispatch({ type: 'startQuiz', atMs: Date.now() }));
+}
+
+function handleEndGame(io: Server, wiring: SocketWiring, socket: Socket): void {
+  if (!isHost(socket)) return;
+  // The engine's post-end state has scores cleared, so capture the pre-end
+  // state for the results record before dispatching.
+  const before = wiring.gameSession.current;
+  const effects = wiring.gameSession.dispatch({ type: 'end' });
+  if (effects.length === 0) return; // engine ignored `end` (already in lobby)
+  wiring.results?.endGame(before);
+  broadcastEffects(io, socket, wiring, effects);
 }
 
 function handleHostEvent(io: Server, wiring: SocketWiring, socket: Socket, event: 'reveal' | 'next'): void {
@@ -86,7 +105,7 @@ function handleHostEvent(io: Server, wiring: SocketWiring, socket: Socket, event
     event === 'reveal'
       ? ({ type: 'reveal' } as const)
       : ({ type: 'next', atMs: Date.now() } as const);
-  broadcastEffects(io, socket, wiring.gameSession.dispatch(wireEvent));
+  broadcastEffects(io, socket, wiring, wiring.gameSession.dispatch(wireEvent));
 }
 
 function handleAnswer(io: Server, wiring: SocketWiring, socket: Socket, raw: unknown): void {
@@ -101,6 +120,7 @@ function handleAnswer(io: Server, wiring: SocketWiring, socket: Socket, raw: unk
   broadcastEffects(
     io,
     socket,
+    wiring,
     wiring.gameSession.dispatch({
       type: 'playerAnswer',
       playerId,
@@ -149,5 +169,5 @@ function handleJoin(io: Server, wiring: SocketWiring, socket: Socket, raw: unkno
   }
   socket.data.playerId = playerId;
   socket.emit('joined', { playerId, name: finalName });
-  broadcastEffects(io, socket, effects);
+  broadcastEffects(io, socket, wiring, effects);
 }

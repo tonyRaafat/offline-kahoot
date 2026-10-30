@@ -5,11 +5,16 @@
 // full question cycle: hostStart, answers, reveal, leaderboards, podium.
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server as HttpServer } from 'node:http';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { Server } from 'socket.io';
 import { io as connect, type Socket as ClientSocket } from 'socket.io-client';
+import type { Quiz } from './engine.js';
 import { GameSession } from './game-session.js';
 import { wireSockets } from './socket.js';
+import { GameResultsRecorder } from './results.js';
 import { sampleQuiz } from './sample-quiz.js';
 
 const SESSION_PIN = '123456';
@@ -184,11 +189,15 @@ interface JoinErrorPayload {
  * its own GameSession, so question-cycle tests never disturb the join tests'
  * shared lobby-phase session.
  */
-async function bootQuizServer(): Promise<{ baseUrl: string; close: () => Promise<void> }> {
+async function bootQuizServer(
+  quiz: Quiz = sampleQuiz,
+  resultsDir?: string,
+): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const bootServer = createServer(expressless());
   wireSockets(new Server(bootServer), {
-    gameSession: new GameSession(sampleQuiz),
+    gameSession: new GameSession(quiz),
     sessionPin: SESSION_PIN,
+    ...(resultsDir ? { results: new GameResultsRecorder(resultsDir) } : {}),
   });
   await new Promise<void>((resolve) => bootServer.listen(0, '127.0.0.1', resolve));
   const { port } = bootServer.address() as AddressInfo;
@@ -441,6 +450,125 @@ describe('question cycle socket contract', () => {
       await expect(rejected).resolves.toEqual({ reason: 'late' });
     } finally {
       vi.useRealTimers();
+      await teardownBoot(boot);
+    }
+  });
+});
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const ONE_ROUND_QUIZ: Quiz = {
+  title: 'Finish Test',
+  questions: [
+    {
+      prompt: '1+1?',
+      type: 'multiple-choice',
+      timeSeconds: 10,
+      options: ['2', '3'],
+      correctIndex: 0,
+    },
+  ],
+};
+
+/** Plays one question round to the podium; the player answers `correctIndex`. */
+async function playRoundToPodium(
+  host: ClientSocket,
+  player: ClientSocket,
+  correctIndex: number,
+): Promise<void> {
+  const startBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+  host.emit('hostStart');
+  const [questionState] = await startBatch;
+  expect(questionState.currentQuestion).not.toBeNull();
+
+  const answeredBatch = nextBatch<StateViewPayload>(player, 'state', 1);
+  player.emit('answer', { answerIndex: correctIndex });
+  const [answered] = await answeredBatch;
+  expect(answered.phase).toBe('question');
+
+  const revealDrain = nextEvent<RevealPayload>(player, 'reveal');
+  const revealStateBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+  host.emit('reveal');
+  await revealDrain;
+  await revealStateBatch;
+
+  const leaderboardBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+  host.emit('next');
+  expect((await leaderboardBatch)[0].phase).toBe('leaderboard');
+
+  const podiumBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+  host.emit('next'); // final leaderboard -> podium
+  expect((await podiumBatch)[0].phase).toBe('podium');
+}
+
+describe('finish game: saved results + back to lobby', () => {
+  it('endGame after a podium returns the lobby (players kept, scores cleared) and saves one results file per game', async () => {
+    const tmpRoot = await mkdtemp(path.join(tmpdir(), 'kahoot-endgame-'));
+    const resultsDir = path.join(tmpRoot, 'results');
+    const boot = await bootQuizServer(ONE_ROUND_QUIZ, resultsDir);
+    try {
+      const host = openAt(boot.baseUrl);
+      host.emit('host');
+      const player = openAt(boot.baseUrl);
+      const joinDrain = nextBatch<StateViewPayload>(host, 'state', 1);
+      const { playerId } = await joinPlayer(player, 'Iris');
+      await joinDrain;
+
+      // Game 1: correct answer -> podium saves the results file.
+      await playRoundToPodium(host, player, ONE_ROUND_QUIZ.questions[0]!.correctIndex);
+      await delay(100); // let the async save flush
+      const files1 = await readdir(resultsDir);
+      expect(files1).toHaveLength(1);
+      const first = JSON.parse(await readFile(path.join(resultsDir, files1[0]!), 'utf8'));
+      expect(first.quizTitle).toBe('Finish Test');
+      expect(first.players).toEqual([{ id: playerId, name: 'Iris' }]);
+      expect(first.finalScores[playerId]).toBeGreaterThan(0);
+      expect(first.questions).toHaveLength(1);
+      expect(first.questions[0].correctIndex).toBe(ONE_ROUND_QUIZ.questions[0].correctIndex);
+      expect(first.questions[0].prompt).toBe('1+1?');
+      expect(first.questions[0].answers).toEqual([
+        {
+          playerId,
+          name: 'Iris',
+          answerIndex: ONE_ROUND_QUIZ.questions[0].correctIndex,
+          correct: true,
+          points: first.finalScores[playerId],
+        },
+      ]);
+
+      // Host presses "Back to lobby": phase lobby, roster kept, scores cleared.
+      const lobbyBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('endGame');
+      const [lobby] = await lobbyBatch;
+      expect(lobby.phase).toBe('lobby');
+      expect(lobby.players).toEqual([{ id: playerId, name: 'Iris' }]);
+      expect(lobby.scores).toEqual({});
+      expect(lobby.currentQuestion).toBeNull();
+
+      // A second endGame in the lobby is a no-op (engine ignores `end` there).
+      let extraStates = 0;
+      host.on('state', () => extraStates++);
+      host.emit('endGame');
+      await delay(100);
+      expect(extraStates).toBe(0);
+
+      // Game 2 from the same lobby: accumulation resets, results save again
+      // under a fresh filename (a -2 suffix only if the same minute repeats).
+      // Answer wrong this time so the two saved records are distinguishable.
+      await playRoundToPodium(host, player, 1); // 1 is the wrong option
+      await delay(100);
+      const files2 = await readdir(resultsDir);
+      expect(files2).toHaveLength(2);
+      const records = await Promise.all(
+        files2.map(async (name) => JSON.parse(await readFile(path.join(resultsDir, name), 'utf8'))),
+      );
+      // Game 1 (correct answer) and game 2 (wrong answer here) both persisted.
+      expect(records.map((r) => r.questions[0].answers[0].correct).sort()).toEqual([
+        false,
+        true,
+      ]);
+    } finally {
+      await rm(tmpRoot, { recursive: true, force: true });
       await teardownBoot(boot);
     }
   });
