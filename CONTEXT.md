@@ -25,7 +25,7 @@ A lightweight, offline, Kahoot-style quiz game. One laptop hosts and projects qu
 ```
 src/          server entry, engine, network, pin, storage, socket wiring
 public/       static client pages: host, player, editor (HTML/CSS/JS)
-data/         quizzes/*.json and results/*.json (results gitignored; seed quiz committed)
+data/         quizzes/*.json and results/*.json (both gitignored except data/quizzes/seed.json; imported/edited quizzes and results are runtime data, not committed)
 *.test.ts     co-located Vitest tests
 ```
 
@@ -33,7 +33,7 @@ data/         quizzes/*.json and results/*.json (results gitignored; seed quiz c
 
 - **Quiz** — `{ title, questions: Question[] }`
 - **Question** — `{ prompt, type: 'multiple-choice' | 'true-false', timeSeconds, options: string[], correctIndex }` (true/false is a 2-option multiple-choice internally)
-- **GameState** — `{ phase, quiz, players, scores, questionIndex, timerDeadline }`
+- **GameState** — `{ phase, quiz, players, scores, questionIndex, timerDeadline, answers, firstCorrectAtMs, leaderboard }`
 - **phase** — `'lobby' | 'question' | 'reveal' | 'leaderboard' | 'podium'`
 - **Event** — `startQuiz`, `playerJoin`, `playerAnswer`, `reveal`, `next`, `end`
 - **Effect** — outbound signals (e.g. `broadcastState`, `broadcastReveal`) consumed by the socket layer

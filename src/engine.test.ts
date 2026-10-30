@@ -158,6 +158,21 @@ describe('playerAnswer', () => {
     expect(effects).toEqual([{ type: 'broadcastState', state: after }]);
   });
 
+  it('scores a full-time instant answer as 1000 (boundary)', () => {
+    // Answered at the exact start: remainingMs == totalMs -> round(1000 * 10000/10000) = 1000.
+    const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    const { state: after } = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p1',
+      answerIndex: 1,
+      atMs: START_AT,
+    });
+    expect(after.scores).toEqual({ p1: 1000 });
+    expect(after.answers).toEqual({
+      p1: { answerIndex: 1, atMs: START_AT, correct: true, points: 1000 },
+    });
+  });
+
   it('rounds fractional scores (worked example: 248)', () => {
     const state = start(lobbyWith(QUICK_MATHS, [['p1', 'Ann']]));
     const { state: after } = reduce(state, {
