@@ -9,6 +9,7 @@ import { wireSockets } from './socket.js';
 import { generatePin } from './pin.js';
 import { detectLanIp, formatJoinUrl, isPortReachable, listenOnFreePort } from './network.js';
 import {
+  deleteQuizFile,
   exportQuiz,
   listQuizzes,
   newQuizFilePath,
@@ -38,6 +39,10 @@ app.get('/', (_req, res) => {
 
 app.get('/play', (_req, res) => {
   res.sendFile(path.join(here, '..', 'public', 'player.html'));
+});
+
+app.get('/editor', (_req, res) => {
+  res.sendFile(path.join(here, '..', 'public', 'editor.html'));
 });
 
 /** Quiz ids are filenames; reject anything that could escape data/quizzes/. */
@@ -104,6 +109,78 @@ app.post('/api/quizzes/import', async (req, res) => {
   res
     .status(201)
     .json({ ok: true, id, title: result.quiz.title, questionCount: result.quiz.questions.length });
+});
+
+// Editor CRUD: one quiz = one data/quizzes/<id>.json file. Every :id route
+// reuses isSafeQuizId() (see below) so ids can never escape data/quizzes/.
+
+// Full quiz JSON for editing on /editor.
+app.get('/api/quizzes/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!isSafeQuizId(id)) {
+    res.status(400).json({ error: 'invalid quiz id' });
+    return;
+  }
+  const quiz = await readStoredQuiz(id);
+  if (!quiz) {
+    res.status(404).json({ error: `unknown quiz id: ${id}` });
+    return;
+  }
+  res.json(quiz);
+});
+
+// Editor creation: { title } only — the quiz starts empty, persisted under a
+// unique slug filename just like the import route.
+app.post('/api/quizzes', async (req, res) => {
+  const title = (req.body as { title?: unknown } | null)?.title;
+  if (typeof title !== 'string' || title.trim() === '') {
+    res.status(400).json({ error: 'title: must be a non-empty string' });
+    return;
+  }
+  const filePath = await newQuizFilePath(QUIZZES_DIR, title);
+  await writeQuizFile(filePath, { title, questions: [] });
+  const id = path.basename(filePath, '.json');
+  res.status(201).json({ id, title });
+});
+
+// Editor save / rename: the body IS the full quiz object. validateQuiz stays
+// authoritative; invalid saves are rejected with the full error list.
+app.put('/api/quizzes/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!isSafeQuizId(id)) {
+    res.status(400).json({ error: 'invalid quiz id' });
+    return;
+  }
+  if (!(await readStoredQuiz(id))) {
+    res.status(404).json({ error: `unknown quiz id: ${id}` });
+    return;
+  }
+  const result = validateQuiz(req.body);
+  if (!result.ok) {
+    res.status(400).json({ error: 'invalid quiz', errors: result.errors });
+    return;
+  }
+  await writeQuizFile(path.join(QUIZZES_DIR, `${id}.json`), result.quiz);
+  res.json({ ok: true, id, title: result.quiz.title, questionCount: result.quiz.questions.length });
+});
+
+// Editor delete: removes the quiz file; unknown ids read as 404 (ENOENT).
+app.delete('/api/quizzes/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!isSafeQuizId(id)) {
+    res.status(400).json({ error: 'invalid quiz id' });
+    return;
+  }
+  try {
+    await deleteQuizFile(path.join(QUIZZES_DIR, `${id}.json`));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      res.status(404).json({ error: `unknown quiz id: ${id}` });
+      return;
+    }
+    throw err;
+  }
+  res.json({ ok: true, id });
 });
 
 // Request bodies that are not JSON get a clear JSON error instead of

@@ -1,0 +1,108 @@
+/* Editor-specific styling on top of the shared host.css palette/patterns. */
+
+.card.editor-card {
+  text-align: left;
+  min-width: min(90vw, 640px);
+}
+
+.quiz-select {
+  font: inherit;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid #b8a8dd;
+  background: #2b1e50;
+  color: #fff;
+}
+
+.player-input,
+.player-button {
+  width: auto;
+}
+
+.player-input {
+  min-width: 14rem;
+}
+
+.row-buttons {
+  display: inline-flex;
+  gap: 0.5rem;
+  vertical-align: middle;
+}
+
+button.danger {
+  background: #ff6b6b;
+  color: #401313;
+}
+
+.remove-question,
+.remove-option {
+  font: inherit;
+  border: none;
+  border-radius: 0.3rem;
+  background: #2b1e50;
+  color: #ff6b6b;
+  cursor: pointer;
+  padding: 0.15rem 0.5rem;
+}
+
+.remove-question {
+  float: right;
+}
+
+.back-link {
+  color: #b8a8dd;
+}
+
+.question-card {
+  border: 1px solid #4b3b8f;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: #33235f;
+}
+
+.question-card h3 {
+  margin: 0 0 0.5rem;
+  color: #ffd23f;
+}
+
+.field-label {
+  color: #b8a8dd;
+  font-size: 0.8rem;
+  display: block;
+  margin: 0.5rem 0 0.15rem;
+}
+
+.ed-input {
+  font: inherit;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid #b8a8dd;
+  background: #2b1e50;
+  color: #fff;
+}
+
+.ed-input.short {
+  width: 5rem;
+}
+
+.option-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.3rem 0;
+}
+
+.option-row input[type='radio'] {
+  accent-color: #1affb0;
+}
+
+.errors {
+  color: #ff817e;
+  list-style: disc;
+  padding-left: 1.2rem;
+}

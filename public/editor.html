@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline Kahoot — Editor</title>
+    <link rel="stylesheet" href="/host.css" />
+    <link rel="stylesheet" href="/editor.css" />
+  </head>
+  <body>
+    <main class="card editor-card" id="view-pick">
+      <h1>Quiz editor</h1>
+
+      <p class="label">Quizzes</p>
+      <p>
+        <select id="quiz-select" class="quiz-select">
+          <option value="" disabled selected>Choose a quiz…</option>
+        </select>
+      </p>
+
+      <p class="label">New quiz</p>
+      <p>
+        <input id="new-title" class="player-input" placeholder="Quiz title" />
+        <button id="create" class="player-button">Create quiz</button>
+      </p>
+
+      <p id="pick-status" class="status"></p>
+      <p><a href="/" class="back-link">‹ Back to host page</a></p>
+    </main>
+
+    <main class="card editor-card" id="view-edit" hidden>
+      <p class="label">Editing quiz</p>
+      <p>
+        <input id="edit-title" class="player-input" />
+        <span class="row-buttons">
+          <button id="rename" class="player-button">Rename</button>
+          <button id="delete" class="player-button danger">Delete quiz</button>
+          <button id="back" class="player-button">‹ Back</button>
+        </span>
+      </p>
+
+      <div id="questions"></div>
+
+      <p class="label">Questions</p>
+      <p>
+        <button id="add-question" class="player-button">＋ Add question</button>
+      </p>
+
+      <p><button id="save" class="player-button">💾 Save quiz</button></p>
+      <ul id="errors" class="errors"></ul>
+      <p id="edit-status" class="status"></p>
+    </main>
+
+    <script src="/editor.js" type="module"></script>
+  </body>
+</html>
