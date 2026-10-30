@@ -8,6 +8,7 @@ import { GameSession } from './game-session.js';
 import { wireSockets } from './socket.js';
 import { generatePin } from './pin.js';
 import { detectLanIp, formatJoinUrl, isPortReachable, listenOnFreePort } from './network.js';
+import { sampleQuiz } from './sample-quiz.js';
 
 const DEFAULT_PORT = 3000;
 const PORT_MAX_RETRIES = 9; // 3000..3009 per "default port 3000, auto-increment if busy"
@@ -37,9 +38,9 @@ function session(): { pin: string; joinUrl: string; qrDataUrl: string } | null {
   return (app.locals.session as { pin: string; joinUrl: string; qrDataUrl: string } | null) ?? null;
 }
 
-// The one live session for this server process. The placeholder quiz is
-// swapped in by the editor/loading ticket; lobby joins work with it as-is.
-const gameSession = new GameSession({ title: '', questions: [] });
+// The one live session for this server process. It runs on the sample quiz
+// until the editor/loading ticket swaps in data/quizzes/*.json.
+const gameSession = new GameSession(sampleQuiz);
 
 const pin = generatePin();
 wireSockets(new Server(httpServer), { gameSession, sessionPin: pin });
