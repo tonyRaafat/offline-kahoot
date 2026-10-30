@@ -45,6 +45,33 @@
       <p id="waiting" class="label">Waiting for the host to start…</p>
     </main>
 
+    <main class="card" id="question" hidden>
+      <p class="label">Question <span id="question-number"></span></p>
+      <h1 id="question-prompt"></h1>
+      <ol id="options" class="answers"></ol>
+      <p id="countdown" class="countdown"></p>
+      <p id="answer-status" class="status" role="status"></p>
+    </main>
+
+    <main class="card" id="reveal" hidden>
+      <h1 id="result-title"></h1>
+      <p id="result-points" class="result-points"></p>
+      <p id="correct-answer" class="label"></p>
+    </main>
+
+    <main class="card" id="leaderboard" hidden>
+      <h1>Leaderboard</h1>
+      <p id="rank-leaderboard" class="pin"></p>
+      <p id="score-leaderboard"></p>
+      <p class="label">Next question coming up…</p>
+    </main>
+
+    <main class="card" id="podium" hidden>
+      <h1>🏆 Game over!</h1>
+      <p id="rank-podium" class="pin"></p>
+      <p id="score-podium"></p>
+    </main>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="/player.js" type="module"></script>
   </body>

@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/host.css" />
   </head>
   <body>
-    <main class="card">
+    <main class="card" id="view-lobby">
       <h1>Join the game</h1>
 
       <p id="status" class="status">starting…</p>
@@ -23,6 +23,36 @@
 
       <p class="label">Players <span id="player-count"></span></p>
       <ul id="players" class="players"></ul>
+
+      <button id="start" class="player-button" disabled>Start game</button>
+    </main>
+
+    <main class="card" id="view-question" hidden>
+      <p class="label"><span id="quiz-title"></span> — Question <span id="question-number"></span></p>
+      <h1 id="question-prompt"></h1>
+      <ol id="question-options" class="answers"></ol>
+      <p class="label">Time left</p>
+      <p id="countdown" class="countdown"></p>
+      <button id="reveal" class="player-button">Reveal answer</button>
+    </main>
+
+    <main class="card" id="view-reveal" hidden>
+      <h1>Correct answer</h1>
+      <p id="correct-answer" class="pin"></p>
+      <p class="label">Answered correctly</p>
+      <ul id="correct-players" class="players"></ul>
+      <button id="next" class="player-button">Next</button>
+    </main>
+
+    <main class="card" id="view-leaderboard" hidden>
+      <h1>Leaderboard</h1>
+      <ol id="leaderboard" class="players"></ol>
+      <button id="leaderboard-next" class="player-button">Next question</button>
+    </main>
+
+    <main class="card" id="view-podium" hidden>
+      <h1>🏆 Podium</h1>
+      <ol id="podium" class="players"></ol>
     </main>
 
     <script src="/socket.io/socket.io.js"></script>

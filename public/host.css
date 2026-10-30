@@ -93,3 +93,64 @@ h1 {
   font-weight: 700;
   cursor: pointer;
 }
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* --- Gameplay views (host + player share this stylesheet) --- */
+
+.countdown {
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: #ffd23f;
+  margin: 0;
+}
+
+.answers {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.answers li {
+  padding: 0.7rem 1rem;
+  border: 1px solid #4b3b8f;
+  border-radius: 0.5rem;
+  background: #2b1e50;
+  text-align: left;
+  font-size: 1.1rem;
+  color: #fff;
+}
+
+button.answer {
+  font: inherit;
+  width: 100%;
+  font-weight: 700;
+  color: #fff;
+  background: #2b1e50;
+  border: 1px solid #4b3b8f;
+  border-radius: 0.5rem;
+  padding: 0.7rem 1rem;
+  text-align: left;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.correct {
+  color: #1affb0;
+}
+
+.wrong {
+  color: #ff6b81;
+}
+
+.result-points {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin: 0;
+}
