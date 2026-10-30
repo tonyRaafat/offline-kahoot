@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline Kahoot — Host</title>
+    <link rel="stylesheet" href="/host.css" />
+  </head>
+  <body>
+    <main class="card">
+      <h1>Join the game</h1>
+
+      <p id="status" class="status">starting…</p>
+
+      <p class="label">Join URL</p>
+      <p><a id="join-url" class="join-url" href="#"></a></p>
+
+      <p class="label">PIN</p>
+      <p id="pin" class="pin"></p>
+
+      <p class="label">Scan to join</p>
+      <img id="qr" class="qr" alt="QR code with the join URL" hidden />
+    </main>
+
+    <script src="/host.js" type="module"></script>
+  </body>
+</html>

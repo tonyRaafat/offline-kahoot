@@ -1,0 +1,56 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #2b1e50;
+  color: #fff;
+}
+
+.card {
+  text-align: center;
+  padding: 2rem 3rem;
+  border-radius: 1rem;
+  background: #3d2b70;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 40%);
+}
+
+h1 {
+  margin-top: 0;
+}
+
+.status {
+  color: #ffd23f;
+}
+
+.label {
+  color: #b8a8dd;
+  font-size: 0.8rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.join-url {
+  color: #1affb0;
+  font-size: 1.3rem;
+  text-decoration: none;
+}
+
+.pin {
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  margin: 0;
+}
+
+.qr {
+  background: #fff;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+}
