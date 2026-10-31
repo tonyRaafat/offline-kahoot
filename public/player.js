@@ -41,6 +41,29 @@ const scoreEls = {
 
 const socket = io();
 
+// Connection diagnostics: surface socket.io transport problems on screen so a
+// phone that can't reach the server shows *why* it's stuck instead of silently
+// spinning, and mirror every event to the console for debugging.
+socket.on('connect', () => {
+  console.log('[player] socket connected', socket.id);
+});
+socket.on('connect_error', (err) => {
+  console.error('[player] connect_error', err?.message ?? err);
+  status.textContent =
+    'Cannot reach the game server. Are you on the same Wi-Fi as the host?';
+});
+socket.on('connect_timeout', () => {
+  console.error('[player] connect_timeout');
+  status.textContent = 'Connection timed out — is the host laptop on and on the same Wi-Fi?';
+});
+socket.on('reconnect_attempt', (attempt) => {
+  console.log('[player] reconnect_attempt', attempt);
+});
+socket.on('reconnect_failed', () => {
+  console.error('[player] reconnect_failed');
+  status.textContent = 'Lost connection to the game server.';
+});
+
 /** PIN + nickname of the current join attempt; re-emitted on every (re)connect. */
 let credentials = null;
 // Guards against double-joining across the click handler and reconnects:

@@ -111,6 +111,8 @@ function renderQuestion(view) {
   const question = view.currentQuestion;
   if (!question) return;
   lastQuestion = question;
+  revealData = null;
+  revealButton.disabled = false;
   show('question');
   quizTitleEl.textContent = view.quizTitle;
   questionNumberEl.textContent = String(question.questionIndex + 1);
@@ -128,6 +130,7 @@ function renderQuestion(view) {
 function renderReveal(view) {
   if (!revealData) return;
   show('reveal');
+  nextButton.disabled = false;
   correctAnswerEl.textContent =
     lastQuestion?.options[revealData.correctIndex] ?? `Option ${revealData.correctIndex + 1}`;
   const names = playerNames(view);
@@ -154,6 +157,9 @@ function renderScoredList(el, view, names, limit = Infinity) {
 
 socket.on('connect', () => {
   socket.emit('host');
+  if (latestView?.phase === 'question') {
+    revealButton.disabled = false;
+  }
 });
 
 socket.on('state', (view) => {
@@ -172,11 +178,13 @@ socket.on('state', (view) => {
     case 'leaderboard':
       stopCountdown();
       show('leaderboard');
+      leaderboardNextButton.disabled = false;
       renderScoredList(leaderboardEl, view, playerNames(view));
       break;
     case 'podium':
       stopCountdown();
       show('podium');
+      endGameButton.disabled = false;
       renderScoredList(podiumEl, view, playerNames(view), 3);
       break;
   }
@@ -190,6 +198,9 @@ socket.on('reveal', (payload) => {
 startButton.addEventListener('click', () => {
   startButton.disabled = true;
   socket.emit('hostStart');
+  setTimeout(() => {
+    if (latestView?.phase === 'lobby') startButton.disabled = false;
+  }, 3000);
 });
 
 // ---- Host quiz picker: list / select / import / export ---------------------
@@ -273,18 +284,33 @@ refreshQuizzes();
 revealButton.addEventListener('click', () => {
   revealButton.disabled = true;
   socket.emit('reveal');
+  setTimeout(() => {
+    if (latestView?.phase === 'question') revealButton.disabled = false;
+  }, 3000);
 });
 
 nextButton.addEventListener('click', () => {
+  nextButton.disabled = true;
   socket.emit('next');
+  setTimeout(() => {
+    if (latestView?.phase === 'reveal') nextButton.disabled = false;
+  }, 3000);
 });
 
 leaderboardNextButton.addEventListener('click', () => {
+  leaderboardNextButton.disabled = true;
   socket.emit('next');
+  setTimeout(() => {
+    if (latestView?.phase === 'leaderboard') leaderboardNextButton.disabled = false;
+  }, 3000);
 });
 
 // Back to lobby: asks the server to dispatch the engine's `end` event — the
 // roster is kept, scores reset, and the results of the finished game are saved.
 endGameButton.addEventListener('click', () => {
+  endGameButton.disabled = true;
   socket.emit('endGame');
+  setTimeout(() => {
+    if (latestView?.phase === 'podium') endGameButton.disabled = false;
+  }, 3000);
 });

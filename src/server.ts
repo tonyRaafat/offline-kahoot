@@ -37,6 +37,19 @@ const LOG_PREFIX = '[offline-kahoot]';
 const RUNNING_AS_SEA = isRunningAsSea();
 
 const app = express();
+// Request logging: every incoming HTTP request is logged so we can tell
+// whether a player's phone ever reaches this server (diagnosing the
+// "page keeps loading" symptom). Runs before all other middleware/routes.
+app.use((req, res, next) => {
+  const started = Date.now();
+  res.on('finish', () => {
+    console.log(
+      `${LOG_PREFIX} HTTP ${req.method} ${req.originalUrl} -> ${res.statusCode} ` +
+        `(${Date.now() - started}ms) from ${req.ip} agent=${req.headers['user-agent'] ?? '?'}`,
+    );
+  });
+  next();
+});
 // One http server hosts both the HTTP routes and socket.io, so players join
 // over the same host/port the QR code points at.
 const httpServer = createServer(app);
@@ -373,7 +386,8 @@ async function main(): Promise<void> {
     DEFAULT_PORT,
     PORT_MAX_RETRIES,
     async (port) => {
-      const joinUrl = formatJoinUrl(hostIp, port);
+      const hostUrl = formatJoinUrl(hostIp, port);
+      const joinUrl = formatJoinUrl(hostIp, port, '/play');
       app.locals.session = {
         pin,
         joinUrl,
@@ -381,7 +395,8 @@ async function main(): Promise<void> {
       };
 
       const reachable = await isPortReachable(hostIp, port);
-      console.log(`${LOG_PREFIX} host page: ${joinUrl}`);
+      console.log(`${LOG_PREFIX} host page: ${hostUrl}`);
+      console.log(`${LOG_PREFIX} join URL: ${joinUrl}`);
       console.log(`${LOG_PREFIX} session PIN: ${pin}`);
       console.log(
         reachable

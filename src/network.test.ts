@@ -15,6 +15,10 @@ describe('formatJoinUrl', () => {
   it('wraps IPv6 addresses in brackets', () => {
     expect(formatJoinUrl('fe80::1', 3000)).toBe('http://[fe80::1]:3000');
   });
+
+  it('appends a path when given (player join page)', () => {
+    expect(formatJoinUrl('192.168.1.5', 3000, '/play')).toBe('http://192.168.1.5:3000/play');
+  });
 });
 
 describe('extractIpv4Address', () => {

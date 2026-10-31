@@ -572,4 +572,58 @@ describe('finish game: saved results + back to lobby', () => {
       await teardownBoot(boot);
     }
   });
+
+  it('syncs state and reveal to reconnecting host and player during a live game', async () => {
+    const boot = await bootQuizServer();
+    try {
+      const host = openAt(boot.baseUrl);
+      host.emit('host');
+      const player = openAt(boot.baseUrl);
+      const joinWait = nextBatch<StateViewPayload>(host, 'state', 1);
+      const { playerId } = await joinPlayer(player, 'SyncTest');
+      await joinWait;
+
+      // Start quiz
+      const startBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('hostStart');
+      await startBatch;
+
+      // Host reconnects during question phase: emits 'host', receives state immediately
+      const host2 = openAt(boot.baseUrl);
+      const host2StateBatch = nextBatch<StateViewPayload>(host2, 'state', 1);
+      host2.emit('host');
+      const [host2State] = await host2StateBatch;
+      expect(host2State.phase).toBe('question');
+      expect(host2State.currentQuestion?.prompt).toBe(sampleQuiz.questions[0]!.prompt);
+
+      // Reveal answer
+      const revealOnP = nextEvent<RevealPayload>(player, 'reveal');
+      const revealBatch = nextBatch<StateViewPayload>(host2, 'state', 1);
+      host2.emit('reveal');
+      await revealOnP;
+      await revealBatch;
+
+      // Host reconnects during reveal phase: receives state AND reveal
+      const host3 = openAt(boot.baseUrl);
+      const host3StateBatch = nextBatch<StateViewPayload>(host3, 'state', 1);
+      const host3RevealWait = nextEvent<RevealPayload>(host3, 'reveal');
+      host3.emit('host');
+      const [host3State] = await host3StateBatch;
+      const host3Reveal = await host3RevealWait;
+      expect(host3State.phase).toBe('reveal');
+      expect(host3Reveal.correctIndex).toBe(sampleQuiz.questions[0]!.correctIndex);
+
+      // Player reconnects during reveal phase: receives state AND reveal
+      const player2 = openAt(boot.baseUrl);
+      const p2StateBatch = nextBatch<StateViewPayload>(player2, 'state', 1);
+      const p2RevealWait = nextEvent<RevealPayload>(player2, 'reveal');
+      player2.emit('join', { pin: SESSION_PIN, name: 'SyncTest', playerId });
+      const [p2State] = await p2StateBatch;
+      const p2Reveal = await p2RevealWait;
+      expect(p2State.phase).toBe('reveal');
+      expect(p2Reveal.correctIndex).toBe(sampleQuiz.questions[0]!.correctIndex);
+    } finally {
+      await teardownBoot(boot);
+    }
+  });
 });

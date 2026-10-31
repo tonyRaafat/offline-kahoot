@@ -7,12 +7,13 @@ import type { Server } from 'node:http';
 const execAsync = promisify(exec);
 
 /**
- * Formats the player join URL. IPv6 literals get bracket-wrapped so the
- * port separator stays unambiguous.
+ * Formats a LAN URL. IPv6 literals get bracket-wrapped so the port separator
+ * stays unambiguous. `path` defaults to '' (the host page); the player join
+ * page passes '/play'.
  */
-export function formatJoinUrl(ip: string, port: number): string {
+export function formatJoinUrl(ip: string, port: number, path = ''): string {
   const host = ip.includes(':') ? `[${ip}]` : ip;
-  return `http://${host}:${port}`;
+  return `http://${host}:${port}${path}`;
 }
 
 const IPV4_RE = /(\d{1,3}(?:\.\d{1,3}){3})/;
