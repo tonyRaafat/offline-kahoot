@@ -3,54 +3,83 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Offline Kahoot — Editor</title>
+    <title data-i18n="app.title.editor">Offline Kahoot — Editor</title>
+    <link rel="stylesheet" href="/tokens.css" />
     <link rel="stylesheet" href="/host.css" />
     <link rel="stylesheet" href="/editor.css" />
   </head>
-  <body>
-    <main class="card editor-card" id="view-pick">
-      <h1>Quiz editor</h1>
+  <body class="bg-kahoot">
+    <main class="card card-wide editor-card" id="view-pick">
+      <header class="card-head">
+        <h1 data-i18n="editor.title">Quiz editor</h1>
+        <p id="pick-status" class="status" role="status"></p>
+      </header>
 
-      <p class="label">Quizzes</p>
-      <p>
-        <select id="quiz-select" class="quiz-select">
-          <option value="" disabled selected>Choose a quiz…</option>
-        </select>
-      </p>
+      <div class="editor-grid">
+        <section class="panel" aria-label="Quizzes" data-i18n-attr="aria-label:editor.quizzes">
+          <p class="label" data-i18n="editor.quizzes">Quizzes</p>
+          <select id="quiz-select" class="quiz-select" data-i18n-attr="aria-label:editor.quizzes">
+            <option value="" disabled selected data-i18n="host.chooseQuiz">Choose a quiz…</option>
+          </select>
+          <p id="editor-empty" class="empty" hidden data-i18n="editor.noQuizzes">
+            No quizzes yet — create one below.
+          </p>
+        </section>
 
-      <p class="label">New quiz</p>
-      <p>
-        <input id="new-title" class="player-input" placeholder="Quiz title" />
-        <button id="create" class="player-button">Create quiz</button>
-      </p>
-
-      <p id="pick-status" class="status"></p>
-      <p><a href="/" class="back-link">‹ Back to host page</a></p>
+        <section class="panel">
+          <p class="label" data-i18n="editor.newQuiz">New quiz</p>
+          <p>
+            <input
+              id="new-title"
+              class="player-input"
+              placeholder="Quiz title"
+              data-i18n-attr="placeholder:editor.titlePlaceholder"
+            />
+            <button id="create" class="player-button" data-i18n="editor.create">Create quiz</button>
+          </p>
+          <p>
+            <a href="/" class="back-link" data-i18n="editor.back">‹ Back to dashboard</a>
+          </p>
+        </section>
+      </div>
     </main>
 
-    <main class="card editor-card" id="view-edit" hidden>
-      <p class="label">Editing quiz</p>
-      <p>
-        <input id="edit-title" class="player-input" />
-        <span class="row-buttons">
-          <button id="rename" class="player-button">Rename</button>
-          <button id="delete" class="player-button danger">Delete quiz</button>
-          <button id="back" class="player-button">‹ Back</button>
-        </span>
-      </p>
+    <main class="card card-wide editor-card" id="view-edit" hidden>
+      <header class="card-head">
+        <h1 data-i18n="editor.editing">Editing quiz</h1>
+        <div class="edit-title-row">
+          <input id="edit-title" class="player-input" data-i18n-attr="aria-label:editor.newQuiz" />
+          <button id="rename" class="player-button secondary" data-i18n="editor.rename">
+            Rename
+          </button>
+          <button id="delete" class="player-button danger" data-i18n="editor.deleteQuiz">
+            Delete quiz
+          </button>
+          <button id="back" class="player-button secondary" data-i18n="editor.backShort">
+            ‹ Back
+          </button>
+        </div>
+      </header>
+
+      <p id="edit-status" class="status" role="status"></p>
 
       <div id="questions"></div>
 
-      <p class="label">Questions</p>
+      <p class="label" data-i18n="editor.questions">Questions</p>
       <p>
-        <button id="add-question" class="player-button">＋ Add question</button>
+        <button id="add-question" class="player-button secondary" data-i18n="editor.addQuestion">
+          ＋ Add question
+        </button>
       </p>
 
-      <p><button id="save" class="player-button">💾 Save quiz</button></p>
+      <p>
+        <button id="save" class="player-button" data-i18n="editor.save">💾 Save quiz</button>
+      </p>
       <ul id="errors" class="errors"></ul>
-      <p id="edit-status" class="status"></p>
     </main>
 
+    <!-- i18n.js must load first: the pages' modules use its global API. -->
+    <script src="/i18n.js"></script>
     <script src="/editor.js" type="module"></script>
   </body>
 </html>

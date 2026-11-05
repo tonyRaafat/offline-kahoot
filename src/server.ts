@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +11,14 @@ import { wireSockets } from './socket.js';
 import { generatePin } from './pin.js';
 import { GameResultsRecorder } from './results.js';
 import { detectLanIp, formatJoinUrl, isPortReachable, listenOnFreePort } from './network.js';
+import {
+  clearedSessionCookie,
+  createSessionToken,
+  sessionCookie,
+  sessionCookieFrom,
+  verifySessionToken,
+} from './auth.js';
+import { requireAdminPassword } from './env.js';
 import {
   deleteQuizFile,
   exportQuiz,
@@ -65,8 +74,11 @@ const PUBLIC_DIR = path.join(here, '..', 'public');
 app.use(express.json());
 if (RUNNING_AS_SEA) {
   // Standalone bundle: there is no public/ directory on disk; serve exactly
-  // the asset keys baked in at build time (see src/sea-assets.ts). Anything
-  // else — including API routes — falls through to the JSON handlers below.
+  // the asset keys baked in at build time (see src/sea-assets.ts), split by
+  // visibility (see the asset-visibility sets below): world-readable shared
+  // + /play assets for everyone, protected page assets only with a session.
+  // Anything else — including API routes — falls through to the handlers
+  // below.
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       next();
@@ -83,32 +95,199 @@ if (RUNNING_AS_SEA) {
       next();
       return;
     }
-    try {
-      res.type(key).send(getAsset(key, 'utf8'));
-    } catch {
-      next();
+    const file = key.slice('public/'.length);
+    const send = (): boolean => {
+      try {
+        if (key.endsWith('.woff2')) {
+          // Fonts embed as binary assets; utf8 would corrupt them. getAsset
+          // without an encoding returns the raw buffer.
+          res.type(assetContentType(key)).send(Buffer.from(getAsset(key)));
+          return true;
+        }
+        res.type(assetContentType(key)).send(getAsset(key, 'utf8'));
+        return true;
+      } catch {
+        return false; // listed key whose asset is missing — fall through
+      }
+    };
+    if (PUBLIC_ASSET_FILES.has(file)) {
+      if (!send()) next();
+      return;
     }
+    if (PROTECTED_ASSET_FILES.has(file)) {
+      serveProtectedAsset(req, res, file, () => {
+        if (!send()) next();
+      });
+      return;
+    }
+    next();
   });
 } else {
-  app.use(express.static(PUBLIC_DIR));
+  // Filesystem mode: an explicit an allowlist replaces the blanket
+  // express.static so protected page assets are never served anonymously
+  // (issue 03's static asset split). Anything unlisted falls through.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      next();
+      return;
+    }
+    let file: string | null = null;
+    try {
+      file = decodeURIComponent(req.path.slice(1));
+    } catch {
+      file = null; // malformed escape sequence — resolve to "not listed"
+    }
+    if (!file) {
+      next(); // malformed or empty — resolve to "not listed"
+      return;
+    }
+    if (file.includes('/') && !file.startsWith('fonts/')) {
+      // Pages and API live on named routes; the fonts/ subfolder (issue 05's
+      // self-hosted display font) is the one deliberately-listed exception.
+      next();
+      return;
+    }
+    if (PUBLIC_ASSET_FILES.has(file)) {
+      res.sendFile(path.join(PUBLIC_DIR, file));
+      return;
+    }
+    if (PROTECTED_ASSET_FILES.has(file)) {
+      serveProtectedAsset(req, res, file, () => res.sendFile(path.join(PUBLIC_DIR, file)));
+      return;
+    }
+    next();
+  });
 }
 
-app.get('/', (_req, res) => {
+/**
+ * MIME for an embedded asset key: express' res.type() treats a string with a
+ * '/' as a literal Content-Type, so passing the full 'public/x.css' key set a
+ * wrong header — key the lookup off the extension instead.
+ */
+function assetContentType(key: string): string {
+  return key.slice(key.lastIndexOf('.') + 1); // e.g. 'css' -> text/css
+}
+
+/**
+ * Static-asset visibility splits (the names of files in public/):
+ *   - PUBLIC: shared tokens/i18n/avatars + /login, /play files, and host.css —
+ *     fetchable by any visitor (players must remain able to join, and the
+ *     login page loads the shared component layer, issue 01).
+ *   - PROTECTED: page-specific assets of the admin pages; anonymous requests
+ *     get a page-like redirect for .html (so typing /host.html lands on the
+ *     login flow) and a 401 JSON for css/js (fetches by pages the user must
+ *     already be authorized for). Issue 04 extended PROTECTED with the
+ *     dashboard page assets.
+ */
+const PUBLIC_ASSET_FILES: ReadonlySet<string> = new Set([
+  'tokens.css',
+  // Shared component layer (issue 01): the anonymous /login page now loads
+  // host.css like every other page, so it must be world-readable too. It
+  // carries no secrets — it is chrome styling only.
+  'host.css',
+  'i18n.js',
+  'avatar.js',
+  'question-defaults.js',
+  'question-defaults.d.ts',
+  // Self-hosted Montserrat woff2 (issue 05): public like the other shared
+  // assets, because the (public) login page loads them before any session.
+  'fonts/montserrat-latin-400-normal.woff2',
+  'fonts/montserrat-latin-700-normal.woff2',
+  'fonts/montserrat-latin-800-normal.woff2',
+  'fonts/montserrat-latin-ext-400-normal.woff2',
+  'fonts/montserrat-latin-ext-700-normal.woff2',
+  'fonts/montserrat-latin-ext-800-normal.woff2',
+  'player.html',
+  'player.js',
+  'login.html',
+  'login.js',
+  'login.css',
+]);
+const PROTECTED_ASSET_FILES: ReadonlySet<string> = new Set([
+  'dashboard.html',
+  'dashboard.js',
+  'dashboard.css',
+  'host.html',
+  'host.js',
+  'editor.html',
+  'editor.js',
+  'editor.css',
+]);
+
+/** Gate one protected asset: session -> serve; .html redirects, rest 401 JSON. */
+function serveProtectedAsset(
+  req: express.Request,
+  res: express.Response,
+  file: string,
+  send: () => void,
+): void {
+  if (isSessionValid(req)) {
+    send();
+    return;
+  }
+  if (file.endsWith('.html')) {
+    res.redirect('/login');
+    return;
+  }
+  res.status(401).json({ error: 'unauthorized: log in at /login' });
+}
+
+/** True when the request carries a valid signed session cookie. */
+function isSessionValid(req: Pick<express.Request, 'headers'>): boolean {
+  return verifySessionToken(sessionCookieFrom(req.headers));
+}
+
+/** Unauthenticated pages/admin data always bounce to the login page. */
+function requireLoginPage(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  if (isSessionValid(req)) {
+    next();
+    return;
+  }
+  res.redirect('/login');
+}
+
+// /login: GET is public (but an already-logged-in visitor goes straight to
+// the dashboard route, which serves the issue-04 dashboard page).
+app.get('/login', (req, res) => {
+  if (isSessionValid(req)) {
+    res.redirect('/');
+    return;
+  }
+  sendPage(res, 'login.html');
+});
+
+// Dashboard at / (admin-dashboard issue 04): the quiz-management home page.
+app.get('/', requireLoginPage, (_req, res) => {
+  sendPage(res, 'dashboard.html');
+});
+
+// /host is the live-game page (issue 04 moved the host flow here from /).
+app.get('/host', requireLoginPage, (_req, res) => {
   sendPage(res, 'host.html');
 });
 
+// /play stays world-readable: players never log in.
 app.get('/play', (_req, res) => {
   sendPage(res, 'player.html');
 });
 
-app.get('/editor', (_req, res) => {
+app.get('/editor', requireLoginPage, (_req, res) => {
   sendPage(res, 'editor.html');
 });
 
 /** Serves one app page from the embedded assets (SEA) or public/ (npm start). */
 function sendPage(
   res: express.Response,
-  pageFile: 'host.html' | 'player.html' | 'editor.html',
+  pageFile:
+    | 'dashboard.html'
+    | 'host.html'
+    | 'player.html'
+    | 'editor.html'
+    | 'login.html',
 ): void {
   if (RUNNING_AS_SEA) {
     const key = publicPathToAssetKey(`/${pageFile}`);
@@ -116,7 +295,7 @@ function sendPage(
       res.status(404).end();
       return;
     }
-    res.type(key).send(getAsset(key, 'utf8'));
+    res.type(assetContentType(key)).send(getAsset(key, 'utf8'));
     return;
   }
   res.sendFile(path.join(PUBLIC_DIR, pageFile));
@@ -138,10 +317,53 @@ async function readStoredQuiz(id: string): Promise<Quiz | null> {
   }
 }
 
+// Every /api route is admin surface (quiz CRUD/import/export, the live-game
+// session/quiz reads) EXCEPT the two auth endpoints, which stay open. All the
+// gated routes share one 401 JSON error shape ({error}, matching the {error}
+// convention the editor already surfaces).
+app.use('/api', (req, res, next) => {
+  if (req.path === '/login' || req.path === '/logout') {
+    next();
+    return;
+  }
+  if (isSessionValid(req)) {
+    next();
+    return;
+  }
+  res.status(401).json({ error: 'unauthorized: log in at /login' });
+});
+
+/** Wrong-password responses are delayed to blunt brute forcing a LAN tool. */
+const WRONG_PASSWORD_DELAY_MS = 300;
+
+/** Login: {password} -> a signed session cookie (HttpOnly, SameSite=Lax, /). */
+app.post('/api/login', (req, res) => {
+  const raw = (req.body as { password?: unknown } | null)?.password;
+  const given = typeof raw === 'string' ? raw : '';
+  const expected = adminPasswordValue;
+  // SHA-256 then timingSafeEqual so the comparison is constant-time including
+  // length differences (raw byte buffers would throw on unequal lengths).
+  const digest = (s: string): Buffer => createHash('sha256').update(s).digest();
+  if (expected.length === 0 || !timingSafeEqual(digest(given), digest(expected))) {
+    setTimeout(
+      () => res.status(401).json({ error: 'wrong password' }),
+      WRONG_PASSWORD_DELAY_MS,
+    );
+    return;
+  }
+  res.setHeader('Set-Cookie', sessionCookie(createSessionToken(expected)));
+  res.status(204).end();
+});
+
+/** Logout: clears the session cookie; idempotent (always 204). */
+app.post('/api/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', clearedSessionCookie());
+  res.status(204).end();
+});
+
 app.get('/api/session', async (_req, res) => {
   res.json(session());
 });
-
 // Browse stored quizzes: [{ id, title, questionCount }]. Unreadable files are
 // skipped so one corrupt file cannot break the whole picker.
 app.get('/api/quizzes', async (_req, res) => {
@@ -294,8 +516,23 @@ app.get('/api/quizzes/:id/export', async (req, res) => {
   res.type('application/json').send(exportQuiz(quiz));
 });
 
-function session(): { pin: string; joinUrl: string; qrDataUrl: string } | null {
-  return (app.locals.session as { pin: string; joinUrl: string; qrDataUrl: string } | null) ?? null;
+/**
+ * Returns the join info (PIN / join URL / QR) plus a `live` flag: true only
+ * while the engine is actually running a game (any phase past the lobby —
+ * question / reveal / leaderboard / podium). Issue 04's report flagged the
+ * dashboard live banner as "whenever a PIN exists"; the paid-review fix keeps
+ * the wire addition minimal (`live: boolean`) — the host pages read
+ * pin/joinUrl/qrDataUrl exactly as before.
+ */
+function session(): { pin: string; joinUrl: string; qrDataUrl: string; live: boolean } | null {
+  const base = app.locals.session as
+    | { pin: string; joinUrl: string; qrDataUrl: string }
+    | null
+    | undefined;
+  if (!base) return null;
+  // The engine phase lives server-side on the live session; only this boolean
+  // crosses the wire — phases/questions themselves stay out of the HTTP API.
+  return { ...base, live: gameSession.current.phase !== 'lobby' };
 }
 
 // Quiz files live in data/quizzes/, one JSON file per quiz. In the standalone
@@ -358,13 +595,28 @@ function parseEmbeddedSeedQuiz(): Quiz {
 }
 
 // Assigned in main() BEFORE the server starts listening, so the handlers
-// registered above can never run against an unset session.
+// registered above can never run against unset values.
 let gameSession!: GameSession;
 let io!: Server;
+/** The boot-validated admin password (IDENTITY for login + token signing). */
+let adminPasswordValue = '';
 
 /** Boot of the live session + stream wiring + listening; no top-level await,
  *  so the SEA bundle can ship this module as CommonJS (SEA requires it). */
 async function main(): Promise<void> {
+  // Auth gate FIRST (issue 01): refuse to boot without ADMIN_PASSWORD —
+  // the server must never run unauthenticated. requireAdminPassword loads
+  // .env (CWD, and beside the executable in SEA mode) with real-environment
+  // precedence and throws the clear variable+file error on failure.
+  try {
+    adminPasswordValue = requireAdminPassword();
+  } catch (err) {
+    console.error(`${LOG_PREFIX} ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  console.log(
+    `${LOG_PREFIX} ADMIN_PASSWORD loaded; admin sessions are signed cookies (HttpOnly, SameSite=Lax, ~30d)`,
+  );
   // The one live session for this server process, seeded from data/quizzes/seed.json.
   gameSession = new GameSession(await bootQuiz());
 
@@ -374,6 +626,11 @@ async function main(): Promise<void> {
     gameSession,
     sessionPin: pin,
     results: new GameResultsRecorder(RESULTS_DIR),
+    // Socket.io host gate (issue 03): only handshakes carrying a valid admin
+    // session cookie may claim the `host` role. Production always configures
+    // the checker here; wireSockets itself fails closed when a wiring omits
+    // it (minimal test boots).
+    verifySessionToken: (token) => verifySessionToken(token, adminPasswordValue),
   });
   const lanIp = await detectLanIp(process.platform);
   if (!lanIp) {

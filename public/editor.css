@@ -1,108 +1,203 @@
-/* Editor-specific styling on top of the shared host.css palette/patterns. */
+/* editor.css — editor-specific components layered on the shared design system
+ * (host.css + tokens.css). Everything references tokens via var(--…).
+ *
+ * Issue 06 (light re-theme): the page opts into the Kahoot backdrop via
+ * <body class="bg-kahoot"> (headline display face, geometric accents come
+ * from tokens.css), and its card matches the dashboard's proportions; no
+ * behavior, markup or route changes. */
 
 .card.editor-card {
-  text-align: left;
-  min-width: min(90vw, 640px);
+  text-align: start;
+  /* Same width as the dashboard card: one shared rhythm for the admin pages. */
+  max-width: 64rem;
 }
 
-.quiz-select {
-  font: inherit;
-  width: 100%;
-  padding: 0.6rem 0.8rem;
-  border-radius: 0.5rem;
-  border: 1px solid #b8a8dd;
-  background: #2b1e50;
-  color: #fff;
+/* The pick view stacks input + Create button inside one wrapper <p> (the
+ * wrapper rhythm is normalized in host.css); the button needs its own gap. */
+.panel > p .player-button {
+  margin-block-start: var(--space-control);
 }
 
-.player-input,
-.player-button {
-  width: auto;
+/* Header treatment from the dashboard (issue 06): title line + the status
+ * line below it, both start-aligned; the card's neon→gold top hairline comes
+ * from host.css' .card::before. */
+.card-head .status {
+  margin-top: var(--sp-3);
 }
 
-.player-input {
-  min-width: 14rem;
+.editor-grid {
+  display: grid;
+  gap: var(--sp-5);
+  grid-template-columns: 1fr;
 }
 
-.row-buttons {
-  display: inline-flex;
-  gap: 0.5rem;
-  vertical-align: middle;
+@media (min-width: 720px) {
+  .editor-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
 }
 
-button.danger {
-  background: #ff6b6b;
-  color: #401313;
+/* Title + action row under the "Editing quiz" heading */
+.edit-title-row {
+  display: grid;
+  gap: var(--space-control); /* comfortable control gap, was 0.5rem */
+  margin: var(--sp-2) 0;
 }
 
-.remove-question,
-.remove-option {
-  font: inherit;
-  border: none;
-  border-radius: 0.3rem;
-  background: #2b1e50;
-  color: #ff6b6b;
-  cursor: pointer;
-  padding: 0.15rem 0.5rem;
+@media (min-width: 560px) {
+  .edit-title-row {
+    grid-template-columns: 1fr auto auto auto;
+  }
+
+  .edit-title-row .player-button {
+    width: auto;
+  }
 }
 
-.remove-question {
-  float: right;
-}
+/* `.player-button.secondary` and `.back-link` moved to the shared host.css
+ * (admin-dashboard issue 04: the dashboard uses them too). */
 
-.back-link {
-  color: #b8a8dd;
+/* ---------- Question cards ----------
+ * The container is the grid (class applied by editor.js): cards share its
+ * gap instead of carrying margins (issue 01). */
+
+.questions-list {
+  display: grid;
+  gap: var(--space-card);
 }
 
 .question-card {
-  border: 1px solid #4b3b8f;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  margin: 0.75rem 0;
-  background: #33235f;
+  border: 1px solid var(--line);
+  /* Same card treatment as .card / .quiz-card (issue 01). */
+  border-radius: var(--r-xl);
+  padding: var(--space-card);
+  background: var(--surface-sunken);
 }
 
 .question-card h3 {
-  margin: 0 0 0.5rem;
-  color: #ffd23f;
+  margin: 0 0 var(--sp-4);
+  color: var(--gold);
+  font-size: var(--fs-md);
+  font-weight: 800;
 }
 
+/* Question body keeps the body font (long-form authoring favors it); the
+ * display face is a heading-only touch, which .bg-kahoot h1 provides. */
+
 .field-label {
-  color: #b8a8dd;
-  font-size: 0.8rem;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   display: block;
-  margin: 0.5rem 0 0.15rem;
+  margin: var(--sp-3) 0 var(--sp-2);
+}
+
+.field-label:first-of-type {
+  margin-top: 0;
 }
 
 .ed-input {
   font: inherit;
-  box-sizing: border-box;
+  font-size: var(--fs-base); /* don't inherit the tiny field-label size */
+  /* Aligned with the shared inputs in host.css (issue 01): same control
+   * height, padding and radius — one input treatment across the app. */
+  min-height: var(--control-h);
   width: 100%;
-  padding: 0.4rem 0.6rem;
-  border-radius: 0.4rem;
-  border: 1px solid #b8a8dd;
-  background: #2b1e50;
-  color: #fff;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-md);
+  border: 2px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
 }
 
 .ed-input.short {
-  width: 5rem;
+  width: 6.5rem;
+}
+
+.ed-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.ed-input:focus {
+  outline: none;
+  border-color: var(--neon);
+  box-shadow: var(--glow-neon);
+}
+
+/* Labels wrap their controls in editor.js; undo the label role on the control
+ * itself so inputs/selects/type dropdowns read at body size. */
+.field-label .ed-input {
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .option-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 0.4rem;
+  gap: var(--sp-2);
   align-items: center;
-  margin: 0.3rem 0;
+  margin: var(--sp-2) 0;
 }
 
 .option-row input[type='radio'] {
-  accent-color: #1affb0;
+  width: 1.4rem;
+  height: 1.4rem;
+  accent-color: var(--neon);
+  cursor: pointer;
 }
 
-.errors {
-  color: #ff817e;
-  list-style: disc;
-  padding-left: 1.2rem;
+.option-row .option-text {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.remove-question,
+.remove-option {
+  font: inherit;
+  min-width: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--rose);
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 var(--sp-2);
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.remove-question:hover,
+.remove-option:hover {
+  border-color: var(--rose);
+  filter: brightness(1.1);
+  transform: none;
+}
+
+.remove-question:active,
+.remove-option:active {
+  transform: scale(0.95);
+}
+
+.remove-question {
+  margin-inline-start: var(--sp-2);
+}
+
+/* ---------- Text status ---------- */
+
+/* The error list markup is shared: host.css owns the .errors presentation
+ * (issue 01 unified the two page styles into one component). */
+
+/* ---------- Arabic hard overrides (shared base handles most) ---------- */
+
+html[dir='rtl'] .field-label {
+  letter-spacing: normal;
 }

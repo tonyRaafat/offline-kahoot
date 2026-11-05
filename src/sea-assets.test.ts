@@ -13,16 +13,33 @@ import {
 } from './sea-assets.js';
 
 const PUBLIC_FILES = [
+  'dashboard.html',
+  'dashboard.js',
+  'dashboard.css',
   'host.html',
   'host.js',
+  'tokens.css',
   'host.css',
   'player.html',
   'player.js',
+  'avatar.js',
+  'i18n.js',
+  'login.html',
+  'login.js',
+  'login.css',
   'editor.html',
   'editor.js',
   'editor.css',
   'question-defaults.js',
   'question-defaults.d.ts',
+  // Self-hosted display font (admin-dashboard issue 05: Montserrat woff2,
+  // latin + latin-ext subsets, weights 400/700/800).
+  'fonts/montserrat-latin-400-normal.woff2',
+  'fonts/montserrat-latin-700-normal.woff2',
+  'fonts/montserrat-latin-800-normal.woff2',
+  'fonts/montserrat-latin-ext-400-normal.woff2',
+  'fonts/montserrat-latin-ext-700-normal.woff2',
+  'fonts/montserrat-latin-ext-800-normal.woff2',
 ];
 
 describe('SEA asset keys', () => {
@@ -38,18 +55,26 @@ describe('SEA asset keys', () => {
 });
 
 describe('publicPathToAssetKey', () => {
-  it('maps the three app page routes to their embedded public files', () => {
+  it('maps the app page routes to their embedded public files', () => {
     // Worked example: the player route serves player.html, like express.static
-    // resolves files, not the bare filepath.
-    expect(publicPathToAssetKey('/')).toBe('public/host.html');
+    // resolves files, not the bare filepath. Issue 04 moved the host flow to
+    // /host and put the new dashboard at /.
+    expect(publicPathToAssetKey('/')).toBe('public/dashboard.html');
+    expect(publicPathToAssetKey('/host')).toBe('public/host.html');
     expect(publicPathToAssetKey('/play')).toBe('public/player.html');
+    expect(publicPathToAssetKey('/login')).toBe('public/login.html');
     expect(publicPathToAssetKey('/editor')).toBe('public/editor.html');
   });
 
   it('maps exact static asset requests to embedded keys', () => {
     expect(publicPathToAssetKey('/host.css')).toBe('public/host.css');
+    expect(publicPathToAssetKey('/dashboard.js')).toBe('public/dashboard.js');
+    expect(publicPathToAssetKey('/tokens.css')).toBe('public/tokens.css');
     expect(publicPathToAssetKey('/editor.js')).toBe('public/editor.js');
     expect(publicPathToAssetKey('/question-defaults.js')).toBe('public/question-defaults.js');
+    expect(publicPathToAssetKey('/fonts/montserrat-latin-700-normal.woff2')).toBe(
+      'public/fonts/montserrat-latin-700-normal.woff2',
+    );
   });
 
   it('is read-only-bundle safe: rejects traversal, unknown, API and abuse paths', () => {

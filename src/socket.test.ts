@@ -14,21 +14,33 @@ import { io as connect, type Socket as ClientSocket } from 'socket.io-client';
 import type { Quiz } from './engine.js';
 import { GameSession } from './game-session.js';
 import { wireSockets } from './socket.js';
+import {
+  createSessionToken,
+  SESSION_COOKIE_NAME,
+  verifySessionToken,
+} from './auth.js';
 import { GameResultsRecorder } from './results.js';
 import { sampleQuiz } from './sample-quiz.js';
 
 const SESSION_PIN = '123456';
+
+/** Test admin password: hosts authenticate with a cookie signed from this. */
+const ADMIN_PASSWORD = 'socket-test-admin-password';
+let sessionToken = '';
 let httpServer: HttpServer | undefined;
 let baseUrl = '';
 
 const clients: ClientSocket[] = [];
 
 beforeAll(async () => {
+  sessionToken = createSessionToken(ADMIN_PASSWORD);
   const app = expressless();
   httpServer = createServer(app);
   wireSockets(new Server(httpServer), {
     gameSession: new GameSession({ title: 'Test quiz', questions: [] }),
     sessionPin: SESSION_PIN,
+    // Host-auth checker, wired like the production boot in src/server.ts:
+    verifySessionToken: (token) => verifySessionToken(token, ADMIN_PASSWORD),
   });
   await new Promise<void>((resolve) => httpServer!.listen(0, '127.0.0.1', resolve));
   const { port } = httpServer!.address() as AddressInfo;
@@ -48,14 +60,25 @@ afterAll(async () => {
   await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
 });
 
-/** Connects a fresh client socket and waits for the initial connection. */
-function open(): ClientSocket {
-  return openAt(baseUrl);
+/**
+ * Connects a fresh client socket. By default it presents NO session cookie
+ * (exactly like a /play player); `open({ auth: true })` joins the handshake
+ * with a valid admin session so the socket may claim the `host` role.
+ */
+function open(opts: { auth?: boolean } = {}): ClientSocket {
+  return openAt(baseUrl, opts);
 }
 
-/** Same as open() but pointed at an ad-hoc server from bootQuizServer(). */
-function openAt(url: string): ClientSocket {
-  const client = connect(url, { transports: ['websocket'] });
+function openAt(url: string, opts: { auth?: boolean } = {}): ClientSocket {
+  const client = connect(url, {
+    transports: ['websocket'],
+    // Socket host gate (admin-dashboard issue 03): the handshake middleware
+    // reads this header into socket.data.isAuthenticated; the websocket
+    // transport attaches extraHeaders to the initial request too.
+    ...(opts.auth
+      ? { extraHeaders: { Cookie: `${SESSION_COOKIE_NAME}=${sessionToken}` } }
+      : {}),
+  });
   clients.push(client);
   return client;
 }
@@ -92,11 +115,12 @@ function nextBatch<T>(client: ClientSocket, event: string, count: number): Promi
 interface JoinedPayload {
   playerId: string;
   name: string;
+  color: string;
 }
 interface StateViewPayload {
   phase: string;
   quizTitle: string;
-  players: Array<{ id: string; name: string }>;
+  players: Array<{ id: string; name: string; color: string }>;
   scores: Record<string, number>;
   leaderboard: string[];
   currentQuestion: {
@@ -120,14 +144,14 @@ describe('player join socket contract', () => {
   it('rejects a wrong PIN with joinError bad-pin', async () => {
     const client = open();
     const error = nextEvent<JoinErrorPayload>(client, 'joinError');
-    client.emit('join', { pin: '999999', name: 'Tony' });
+    client.emit('join', { pin: '999999', name: 'Tony', color: 'red' });
     await expect(error).resolves.toEqual({ reason: 'bad-pin' });
   });
 
   it('rejects a bad nickname with joinError bad-name', async () => {
     const client = open();
     const error = nextEvent<JoinErrorPayload>(client, 'joinError');
-    client.emit('join', { pin: SESSION_PIN, name: '' });
+    client.emit('join', { pin: SESSION_PIN, name: '', color: 'red' });
     await expect(error).resolves.toEqual({ reason: 'bad-name' });
   });
 
@@ -135,7 +159,7 @@ describe('player join socket contract', () => {
     const client = open();
     const joined = nextEvent<JoinedPayload>(client, 'joined');
     const state = nextEvent<StateViewPayload>(client, 'state');
-    client.emit('join', { pin: SESSION_PIN, name: 'Tony' });
+    client.emit('join', { pin: SESSION_PIN, name: 'Tony', color: 'red' });
 
     const joinedPayload = await joined;
     expect(joinedPayload.name).toBe('Tony');
@@ -144,26 +168,52 @@ describe('player join socket contract', () => {
     expect(statePayload.phase).toBe('lobby');
     expect(statePayload.quizTitle).toBe('Test quiz');
     expect(statePayload.players).toEqual([
-      { id: joinedPayload.playerId, name: 'Tony' },
+      { id: joinedPayload.playerId, name: 'Tony', color: 'red' },
     ]);
   });
 
-  it('auto-suffixes duplicate nicknames on the wire (Tony -> Tony-2)', async () => {
+  it('rejects a duplicate nickname with joinError nameTaken (no auto-suffixing)', async () => {
     const first = open();
     const joinedFirst = nextEvent<JoinedPayload>(first, 'joined');
-    first.emit('join', { pin: SESSION_PIN, name: 'Sofie' });
+    first.emit('join', { pin: SESSION_PIN, name: 'Sofie', color: 'blue' });
     await joinedFirst;
 
     const second = open();
+    const error = nextEvent<JoinErrorPayload>(second, 'joinError');
+    second.emit('join', { pin: SESSION_PIN, name: 'Sofie', color: 'green' });
+    await expect(error).resolves.toEqual({ reason: 'nameTaken' });
+  });
+
+  it('allows a duplicate COLOR but rejects an unknown color with colorRejected', async () => {
+    const first = open();
+    const joinedFirst = nextEvent<JoinedPayload>(first, 'joined');
+    first.emit('join', { pin: SESSION_PIN, name: 'Ada', color: 'blue' });
+    const firstJoined = await joinedFirst;
+
+    // Same color as Ada: fine.
+    const second = open();
     const joinedSecond = nextEvent<JoinedPayload>(second, 'joined');
-    second.emit('join', { pin: SESSION_PIN, name: 'Sofie' });
-    await expect(joinedSecond).resolves.toMatchObject({ name: 'Sofie-2' });
+    second.emit('join', { pin: SESSION_PIN, name: 'Bob', color: 'blue' });
+    const secondJoined = await joinedSecond;
+    expect(secondJoined.color).toBe('blue');
+    expect(firstJoined.color).toBe('blue');
+
+    // Unknown/missing color: rejected.
+    const third = open();
+    const error = nextEvent<JoinErrorPayload>(third, 'joinError');
+    third.emit('join', { pin: SESSION_PIN, name: 'Cara', color: 'magenta' });
+    await expect(error).resolves.toEqual({ reason: 'colorRejected' });
+
+    const fourth = open();
+    const error4 = nextEvent<JoinErrorPayload>(fourth, 'joinError');
+    fourth.emit('join', { pin: SESSION_PIN, name: 'Dee' });
+    await expect(error4).resolves.toEqual({ reason: 'colorRejected' });
   });
 
   it('reconnect resumes the existing player instead of duplicating it', async () => {
     const first = open();
     const joined = nextEvent<JoinedPayload>(first, 'joined');
-    first.emit('join', { pin: SESSION_PIN, name: 'Rejoiner' });
+    first.emit('join', { pin: SESSION_PIN, name: 'Rejoiner', color: 'pink' });
     const { playerId, name } = await joined;
 
     first.disconnect();
@@ -171,12 +221,35 @@ describe('player join socket contract', () => {
     const resumed = open();
     const rejoined = nextEvent<JoinedPayload>(resumed, 'joined');
     const state = nextEvent<StateViewPayload>(resumed, 'state');
-    resumed.emit('join', { pin: SESSION_PIN, name: 'Rejoiner', playerId });
+    resumed.emit('join', { pin: SESSION_PIN, name: 'Rejoiner', color: 'pink', playerId });
 
-    await expect(rejoined).resolves.toEqual({ playerId, name });
+    await expect(rejoined).resolves.toEqual({ playerId, name, color: 'pink' });
     const statePayload = await state;
     const roster = statePayload.players.filter((p) => p.name.startsWith('Rejoiner'));
-    expect(roster).toEqual([{ id: playerId, name }]);
+    expect(roster).toEqual([{ id: playerId, name, color: 'pink' }]);
+  });
+
+  it('resume with a missing/unknown color restores the stored name + color', async () => {
+    const first = open();
+    const joined = nextEvent<JoinedPayload>(first, 'joined');
+    first.emit('join', { pin: SESSION_PIN, name: 'Restorer', color: 'green' });
+    const { playerId, name } = await joined;
+
+    first.disconnect();
+
+    const resumed = open();
+    const rejoined = nextEvent<JoinedPayload>(resumed, 'joined');
+    resumed.emit('join', { pin: SESSION_PIN, name: 'Restorer', color: 'magenta', playerId });
+
+    // Resume wins over the (invalid) client color: the stored one is kept.
+    await expect(rejoined).resolves.toEqual({ playerId, name, color: 'green' });
+  });
+
+  it('a stale playerId with an unknown color is still colorRejected (fresh join)', async () => {
+    const fresh = open();
+    const error = nextEvent<JoinErrorPayload>(fresh, 'joinError');
+    fresh.emit('join', { pin: SESSION_PIN, name: 'Newbie', color: 'magenta', playerId: 'ghost' });
+    await expect(error).resolves.toEqual({ reason: 'colorRejected' });
   });
 });
 
@@ -198,6 +271,7 @@ async function bootQuizServer(
     gameSession: new GameSession(quiz),
     sessionPin: SESSION_PIN,
     ...(resultsDir ? { results: new GameResultsRecorder(resultsDir) } : {}),
+    verifySessionToken: (token) => verifySessionToken(token, ADMIN_PASSWORD),
   });
   await new Promise<void>((resolve) => bootServer.listen(0, '127.0.0.1', resolve));
   const { port } = bootServer.address() as AddressInfo;
@@ -210,7 +284,7 @@ async function bootQuizServer(
 /** Emits `join` on a socket and resolves with the final `joined` payload. */
 async function joinPlayer(socket: ClientSocket, name: string): Promise<JoinedPayload> {
   const joined = nextEvent<JoinedPayload>(socket, 'joined');
-  socket.emit('join', { pin: SESSION_PIN, name });
+  socket.emit('join', { pin: SESSION_PIN, name, color: 'orange' });
   return await joined;
 }
 
@@ -224,7 +298,7 @@ describe('question cycle socket contract', () => {
   it('drives a full game: hostStart -> answers -> reveal -> leaderboards -> podium', async () => {
     const boot = await bootQuizServer();
     try {
-      const host = openAt(boot.baseUrl);
+      const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const p1 = openAt(boot.baseUrl);
       const p2 = openAt(boot.baseUrl);
@@ -337,7 +411,7 @@ describe('question cycle socket contract', () => {
   it('ignores hostStart/reveal/next from sockets that are not the host', async () => {
     const boot = await bootQuizServer();
     try {
-      const host = openAt(boot.baseUrl);
+      const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
       // Drain the join broadcast before spying on the host socket.
@@ -376,7 +450,7 @@ describe('question cycle socket contract', () => {
   it('rejects a second answer on the same question with already-answered', async () => {
     const boot = await bootQuizServer();
     try {
-      const host = openAt(boot.baseUrl);
+      const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
       const joinDrain = nextBatch<StateViewPayload>(player, 'state', 1);
@@ -403,7 +477,7 @@ describe('question cycle socket contract', () => {
   it('rejects an out-of-range or malformed answer with invalid-answer', async () => {
     const boot = await bootQuizServer();
     try {
-      const host = openAt(boot.baseUrl);
+      const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
       const joinDrain = nextBatch<StateViewPayload>(player, 'state', 1);
@@ -430,7 +504,7 @@ describe('question cycle socket contract', () => {
     try {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(1_000_000_000_000);
-      const host = openAt(boot.baseUrl);
+      const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
       const joinDrain = nextBatch<StateViewPayload>(player, 'state', 1);
@@ -507,7 +581,7 @@ describe('finish game: saved results + back to lobby', () => {
     const resultsDir = path.join(tmpRoot, 'results');
     const boot = await bootQuizServer(ONE_ROUND_QUIZ, resultsDir);
     try {
-      const host = openAt(boot.baseUrl);
+      const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
       const joinDrain = nextBatch<StateViewPayload>(host, 'state', 1);
@@ -541,7 +615,7 @@ describe('finish game: saved results + back to lobby', () => {
       host.emit('endGame');
       const [lobby] = await lobbyBatch;
       expect(lobby.phase).toBe('lobby');
-      expect(lobby.players).toEqual([{ id: playerId, name: 'Iris' }]);
+      expect(lobby.players).toEqual([{ id: playerId, name: 'Iris', color: 'orange' }]);
       expect(lobby.scores).toEqual({});
       expect(lobby.currentQuestion).toBeNull();
 
@@ -576,7 +650,7 @@ describe('finish game: saved results + back to lobby', () => {
   it('syncs state and reveal to reconnecting host and player during a live game', async () => {
     const boot = await bootQuizServer();
     try {
-      const host = openAt(boot.baseUrl);
+      const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
       const joinWait = nextBatch<StateViewPayload>(host, 'state', 1);
@@ -589,7 +663,7 @@ describe('finish game: saved results + back to lobby', () => {
       await startBatch;
 
       // Host reconnects during question phase: emits 'host', receives state immediately
-      const host2 = openAt(boot.baseUrl);
+      const host2 = openAt(boot.baseUrl, { auth: true });
       const host2StateBatch = nextBatch<StateViewPayload>(host2, 'state', 1);
       host2.emit('host');
       const [host2State] = await host2StateBatch;
@@ -604,7 +678,7 @@ describe('finish game: saved results + back to lobby', () => {
       await revealBatch;
 
       // Host reconnects during reveal phase: receives state AND reveal
-      const host3 = openAt(boot.baseUrl);
+      const host3 = openAt(boot.baseUrl, { auth: true });
       const host3StateBatch = nextBatch<StateViewPayload>(host3, 'state', 1);
       const host3RevealWait = nextEvent<RevealPayload>(host3, 'reveal');
       host3.emit('host');
@@ -617,11 +691,85 @@ describe('finish game: saved results + back to lobby', () => {
       const player2 = openAt(boot.baseUrl);
       const p2StateBatch = nextBatch<StateViewPayload>(player2, 'state', 1);
       const p2RevealWait = nextEvent<RevealPayload>(player2, 'reveal');
-      player2.emit('join', { pin: SESSION_PIN, name: 'SyncTest', playerId });
+      player2.emit('join', { pin: SESSION_PIN, name: 'SyncTest', color: 'orange', playerId });
       const [p2State] = await p2StateBatch;
       const p2Reveal = await p2RevealWait;
       expect(p2State.phase).toBe('reveal');
       expect(p2Reveal.correctIndex).toBe(sampleQuiz.questions[0]!.correctIndex);
+    } finally {
+      await teardownBoot(boot);
+    }
+  });
+});
+
+describe('host authentication gate (issue 03)', () => {
+  it('an anonymous socket cannot claim host, so hostStart/reveal/next endGame do nothing', async () => {
+    const boot = await bootQuizServer();
+    try {
+      // The spoof: exactly what a malicious /play visitor could emit.
+      const anon = openAt(boot.baseUrl);
+      const anonStates: StateViewPayload[] = [];
+      anon.on('state', (s: StateViewPayload) => anonStates.push(s));
+      const anonReveals: RevealPayload[] = [];
+      anon.on('reveal', (r: RevealPayload) => anonReveals.push(r));
+      anon.emit('host');
+      anon.emit('hostStart'); // would have started the quiz before the gate
+      anon.emit('reveal');
+      anon.emit('next');
+      anon.emit('endGame');
+
+      // Owner socket (just to drain and compare): nothing was broadcast at all.
+      const spectator = openAt(boot.baseUrl, { auth: true });
+      let spectatorEvents = 0;
+      spectator.onAny(() => spectatorEvents++);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(anonStates).toEqual([]);
+      expect(anonReveals).toEqual([]);
+      expect(spectatorEvents).toBe(0);
+    } finally {
+      await teardownBoot(boot);
+    }
+  });
+
+  it('a garbage session cookie is treated as anonymous (host claims rejected)', async () => {
+    const boot = await bootQuizServer();
+    try {
+      const forged = connect(boot.baseUrl, {
+        transports: ['websocket'],
+        extraHeaders: { Cookie: `${SESSION_COOKIE_NAME}=123456.signature-from-elsewhere` },
+      });
+      clients.push(forged);
+      const states: StateViewPayload[] = [];
+      forged.on('state', (s: StateViewPayload) => states.push(s));
+      forged.emit('host');
+      forged.emit('hostStart');
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(states).toEqual([]);
+    } finally {
+      await teardownBoot(boot);
+    }
+  });
+
+  it('an authenticated socket CAN host the full lobby -> start flow', async () => {
+    const boot = await bootQuizServer();
+    try {
+      const host = openAt(boot.baseUrl, { auth: true });
+      host.emit('host');
+      // The player joins anonymously, exactly as from /play.
+      const player = openAt(boot.baseUrl);
+      const joinDrain = nextBatch<StateViewPayload>(host, 'state', 1);
+      const { playerId } = await joinPlayer(player, 'Legit');
+      await joinDrain;
+
+      const startBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('hostStart');
+      const [started] = await startBatch;
+      expect(started.phase).toBe('question');
+      expect(started.currentQuestion?.prompt).toBe(sampleQuiz.questions[0].prompt);
+      expect(started.players).toEqual([
+        { id: playerId, name: 'Legit', color: 'orange' },
+      ]);
     } finally {
       await teardownBoot(boot);
     }

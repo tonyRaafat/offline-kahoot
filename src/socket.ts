@@ -9,7 +9,10 @@
 //
 // Wire contract:
 //   client -> server:
-//     `join` { pin: string, name: string, playerId?: string }
+//     `join` { pin: string, name: string, color: string, playerId?: string }
+//       color must be one of the 10 avatar palette keys (src/avatar-colors.ts)
+//       for a fresh join; a resume (well-formed playerId) may omit an invalid
+//       color and keeps the stored color instead.
 //     `host` (no payload)        marks this socket as THE host (once per page)
 //     `hostStart` (no payload)   host only: lobby -> question 1
 //     `answer` { answerIndex }   the joined player's answer for the live question
@@ -18,12 +21,18 @@
 //     `endGame` (no payload)     host only: any live phase -> lobby (players kept,
 //                                scores cleared); results of the live game are saved
 //   server -> socket:
-//     `joined` { playerId, name }   name = FINAL name after duplicate
-//                                    auto-suffixing, followed by `state`
-//     `joinError` { reason }        on bad payload/PIN/name
+//     `joined` { playerId, name, color }   echo of the player's identity:
+//                                    resume keeps the stored name+color; a fresh
+//                                    join gets exactly what was validated
+//     `joinError` { reason }        on bad payload/PIN/name, a missing or unknown
+//                                    avatar color (`colorRejected`), a duplicate
+//                                    nickname (`nameTaken` — unique names are
+//                                    enforced here, auto-suffixing is gone), or a
+//                                    join after the quiz started (`game-started`)
 //     `answerRejected` { reason }   routed to the submitting player only
 //   server -> all:
-//     `state` StateView on every broadcastState Effect
+//     `state` StateView on every broadcastState Effect (PlayerView carries
+//              id/name/color; never correctIndex)
 //     `reveal` Reveal on every broadcastReveal Effect (safe as-is; it carries
 //              correctIndex because the answer is already public there)
 import { randomUUID } from 'node:crypto';
@@ -33,6 +42,7 @@ import type { GameSession } from './game-session.js';
 import { parseJoinPayload, toPlayerJoinEvent } from './join.js';
 import { stateView } from './state-view.js';
 import { type GameResultsRecorder } from './results.js';
+import { sessionCookieFrom } from './auth.js';
 
 const LOG_PREFIX = '[offline-kahoot]';
 
@@ -41,6 +51,18 @@ export interface SocketWiring {
   sessionPin: string;
   /** Results accumulator for finished games; omitted only in minimal test boots. */
   results?: GameResultsRecorder;
+  /**
+   * Session authenticator for the `host` gate (admin-dashboard issue 03):
+   * called with the handshake's session cookie value (undefined when there
+   * is none). Only sockets whose handshake carries a VALID admin session may
+   * claim the `host` role; being host keeps gating hostStart/reveal/next/
+   * endGame as before, and player join/answer stays unauthenticated.
+   *
+   * FAILS CLOSED: when omitted (minimal test boots with no auth configured),
+   * no socket is authenticated and nobody can become host. The production
+   * boot in src/server.ts always configures this.
+   */
+  verifySessionToken?: (token: string | undefined) => boolean;
 }
 
 export function wireSockets(io: Server, wiring: SocketWiring): void {
@@ -48,6 +70,17 @@ export function wireSockets(io: Server, wiring: SocketWiring): void {
   const onReveal = (reveal: Reveal) => {
     lastReveal = reveal;
   };
+
+  // Handshake middleware: read the session cookie ONCE per connection so the
+  // host gate below can trust socket.data.isAuthenticated (the browser
+  // attaches the HttpOnly cookie to same-origin socket.io requests
+  // automatically; host pages connect with withCredentials: true).
+  io.use((socket, next) => {
+    socket.data.isAuthenticated =
+      wiring.verifySessionToken !== undefined &&
+      wiring.verifySessionToken(sessionCookieFrom(socket.handshake.headers));
+    next();
+  });
 
   io.on('connection', (socket) => {
     const transport = socket.conn.transport.name;
@@ -60,6 +93,10 @@ export function wireSockets(io: Server, wiring: SocketWiring): void {
     });
     socket.on('join', (raw: unknown) => handleJoin(io, wiring, socket, raw, lastReveal, onReveal));
     socket.on('host', () => {
+      // The `host` claim is now tied to the authenticated session (issue 03):
+      // an anonymous socket can no longer self-declare the host role and then
+      // drive the game. Event name + empty payload stay identical.
+      if (socket.data.isAuthenticated !== true) return;
       socket.data.isHost = true;
       if (wiring.gameSession.current.phase !== 'lobby') {
         socket.emit('state', stateView(wiring.gameSession.current));
@@ -205,6 +242,7 @@ function handleJoin(
   lastReveal?: Reveal | null,
   onReveal?: (reveal: Reveal) => void,
 ): void {
+  // Joining stays UNAUTHENTICATED: players come from the public /play page.
   const parsed = parseJoinPayload(raw, wiring.sessionPin);
   console.log(`${LOG_PREFIX} join attempt: id=${socket.id} result=${parsed.ok ? 'ok' : parsed.reason}`);
   if (!parsed.ok) {
@@ -217,9 +255,10 @@ function handleJoin(
   const existing = wiring.gameSession.current.players.find((p) => p.id === playerId);
   if (existing) {
     // Reconnect: reduce() no-ops for an already-joined playerId, so resume the
-    // session without dispatching a new join and hand back the final name.
+    // session without dispatching a new join and hand back the stored
+    // name + color (duplicate-name checks do not apply to a resume).
     socket.data.playerId = playerId;
-    socket.emit('joined', { playerId, name: existing.name });
+    socket.emit('joined', { playerId, name: existing.name, color: existing.color });
     socket.emit('state', stateView(wiring.gameSession.current));
     if (wiring.gameSession.current.phase === 'reveal' && lastReveal) {
       socket.emit('reveal', lastReveal);
@@ -227,15 +266,39 @@ function handleJoin(
     return;
   }
 
-  const effects = wiring.gameSession.dispatch(toPlayerJoinEvent(payload, playerId, Date.now()));
-  const finalName = wiring.gameSession.current.players.find((p) => p.id === playerId)?.name;
-  if (finalName === undefined) {
+  // Fresh join: the nickname must be unique — reject instead of auto-suffixing
+  // (Tony -> Tony-2 is gone). Colors are already validated in parseJoinPayload,
+  // and duplicates of a COLOR are allowed.
+  // A resume candidate whose playerId did not resolve (stale/foreign id) has
+  // no stored color to restore, so a missing/unknown client color is rejected
+  // here exactly like for a fresh join; a resolved resume never gets here.
+  if (!payload.color) {
+    socket.emit('joinError', { reason: 'colorRejected' });
+    return;
+  }
+  const nameTaken = wiring.gameSession.current.players.some(
+    (p) => p.name === payload.name,
+  );
+  if (nameTaken) {
+    socket.emit('joinError', { reason: 'nameTaken' });
+    return;
+  }
+
+  const effects = wiring.gameSession.dispatch(
+    toPlayerJoinEvent({ ...payload, color: payload.color }, playerId, Date.now()),
+  );
+  const joinedPlayer = wiring.gameSession.current.players.find((p) => p.id === playerId);
+  if (!joinedPlayer) {
     // The engine ignored the join (it only accepts players while in the lobby
     // phase): the quiz is already running, so the lobby join cannot proceed.
     socket.emit('joinError', { reason: 'game-started' });
     return;
   }
   socket.data.playerId = playerId;
-  socket.emit('joined', { playerId, name: finalName });
+  socket.emit('joined', {
+    playerId,
+    name: joinedPlayer.name,
+    color: joinedPlayer.color,
+  });
   broadcastEffects(io, socket, wiring, effects, onReveal);
 }

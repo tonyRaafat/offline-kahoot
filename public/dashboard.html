@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="app.title.dashboard">Offline Kahoot — Dashboard</title>
+    <link rel="stylesheet" href="/tokens.css" />
+    <link rel="stylesheet" href="/host.css" />
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="bg-kahoot">
+    <main class="card card-wide dashboard-card" id="view-dashboard">
+      <header class="card-head dash-head">
+        <div class="dash-head-row">
+          <h1 data-i18n="dashboard.title">Quizzes</h1>
+          <!-- Logout lives on the dashboard (admin-dashboard issue 04); the
+               class is host.css' shared logout control. -->
+          <button id="logout" class="logout-link" type="button" data-i18n="dashboard.logout">
+            Log out
+          </button>
+        </div>
+        <p id="dashboard-status" class="status" role="status"></p>
+      </header>
+
+      <!-- Live-game indicator: shown when /api/session reports a live session
+           PIN; the whole banner is the link to the host screen. -->
+      <a id="live-banner" href="/host" class="live-banner" data-i18n-attr="aria-label:dashboard.openHostLabel" hidden>
+        <span id="live-banner-text"></span>
+      </a>
+
+      <!-- Create: one-field form mirroring the editor's create flow.
+           Import lives next to it (admin-dashboard spec 4.1: import/export
+           moved here from the host lobby); the file input is hidden and
+           triggered by the equally-styled button so keyboard + disabled
+           states behave like the other buttons. -->
+      <div class="create-row">
+        <input
+          id="new-title"
+          class="player-input"
+          data-i18n-attr="placeholder:editor.titlePlaceholder"
+          placeholder="Quiz title"
+        />
+        <button id="create" class="player-button" data-i18n="dashboard.create">Create</button>
+        <button id="import" class="player-button secondary" data-i18n="dashboard.import">
+          Import
+        </button>
+      </div>
+      <input
+        id="import-file"
+        type="file"
+        accept=".json,application/json"
+        data-i18n-attr="aria-label:dashboard.import"
+        hidden
+      />
+
+      <!-- Quiz cards, rebuilt from GET /api/quizzes on every change. -->
+      <ul id="quiz-cards" class="quiz-cards" data-i18n-attr="aria-label:dashboard.title"></ul>
+      <p id="quizzes-empty" class="empty" hidden data-i18n="dashboard.empty">
+        No quizzes yet — create your first quiz.
+      </p>
+    </main>
+
+    <!-- i18n.js must load first: the pages' modules use its global API. -->
+    <script src="/i18n.js"></script>
+    <script src="/dashboard.js" type="module"></script>
+  </body>
+</html>

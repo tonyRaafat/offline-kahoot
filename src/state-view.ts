@@ -6,10 +6,12 @@
 // (questions, correct answers) or current-round answer records.
 
 import type { GameState, Phase } from './engine.js';
+import type { AvatarColor } from './avatar-colors.js';
 
 export interface PlayerView {
   id: string;
   name: string;
+  color: AvatarColor;
 }
 
 export interface CurrentQuestionView {
@@ -49,7 +51,7 @@ export function stateView(state: GameState): StateView {
   return {
     phase: state.phase,
     quizTitle: state.quiz.title,
-    players: state.players.map((p) => ({ id: p.id, name: p.name })),
+    players: state.players.map((p) => ({ id: p.id, name: p.name, color: p.color })),
     scores: { ...state.scores },
     leaderboard: [...state.leaderboard],
     currentQuestion,

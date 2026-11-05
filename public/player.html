@@ -3,16 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Offline Kahoot — Join</title>
+    <title data-i18n="app.title.player">Offline Kahoot — Join</title>
+    <link rel="stylesheet" href="/tokens.css" />
     <link rel="stylesheet" href="/host.css" />
   </head>
   <body>
     <main class="card" id="entering">
-      <h1>Join the game</h1>
+      <h1 data-i18n="player.joinTitle">Join the game</h1>
 
       <p id="status" class="status" role="status"></p>
 
-      <p class="label"><label for="pin">Game PIN</label></p>
+      <p class="label"><label for="pin" data-i18n="player.pinLabel">Game PIN</label></p>
       <p>
         <input
           id="pin"
@@ -21,10 +22,11 @@
           autocomplete="off"
           maxlength="6"
           placeholder="000000"
+          data-i18n-attr="placeholder:player.pinPlaceholder"
         />
       </p>
 
-      <p class="label"><label for="name">Nickname</label></p>
+      <p class="label"><label for="name" data-i18n="player.nameLabel">Nickname</label></p>
       <p>
         <input
           id="name"
@@ -32,24 +34,51 @@
           autocomplete="off"
           maxlength="20"
           placeholder="Nickname"
+          data-i18n-attr="placeholder:player.namePlaceholder"
         />
       </p>
 
-      <p><button id="join" class="player-button">Join</button></p>
+      <p class="label"><span data-i18n="player.colorLabel">Avatar color</span></p>
+      <p
+        id="color-picker"
+        class="color-picker"
+        role="radiogroup"
+        aria-label="Avatar color"
+        data-i18n-attr="aria-label:player.colorLabel"
+      ></p>
+
+      <p>
+        <button id="join" class="player-button" data-i18n="player.join">Join</button>
+      </p>
     </main>
 
     <main class="card" id="lobby" hidden>
-      <h1>You're in!</h1>
-      <p class="label">Playing as</p>
-      <p id="final-name" class="pin"></p>
-      <p id="waiting" class="label">Waiting for the host to start…</p>
+      <h1 data-i18n="player.inTitle">You're in!</h1>
+      <p class="label" data-i18n="player.playingAs">Playing as</p>
+      <p id="final-name" class="player-name avatar-row"></p>
+      <p id="waiting" class="status" role="status" data-i18n="player.waiting">
+        Waiting for the host to start…
+      </p>
+      <p class="label">
+        <span data-i18n="player.players">Players</span>
+        <span id="lobby-count"></span>
+      </p>
+      <ul id="lobby-players" class="players" data-i18n-attr="aria-label:player.players"></ul>
     </main>
 
     <main class="card" id="question" hidden>
-      <p class="label">Question <span id="question-number"></span></p>
+      <p class="label">
+        <span data-i18n="word.question">Question</span>
+        <span id="question-number"></span>
+      </p>
       <h1 id="question-prompt"></h1>
       <ol id="options" class="answers"></ol>
-      <p id="countdown" class="countdown"></p>
+      <p
+        id="countdown"
+        class="countdown"
+        aria-label="Seconds left"
+        data-i18n-attr="aria-label:host.timeLeft"
+      ></p>
       <p id="answer-status" class="status" role="status"></p>
     </main>
 
@@ -60,18 +89,20 @@
     </main>
 
     <main class="card" id="leaderboard" hidden>
-      <h1>Leaderboard</h1>
-      <p id="rank-leaderboard" class="pin"></p>
-      <p id="score-leaderboard"></p>
-      <p class="label">Next question coming up…</p>
+      <h1 data-i18n="player.leaderboard">Leaderboard</h1>
+      <p id="rank-leaderboard" class="rank-line"></p>
+      <p id="score-leaderboard" class="avatar-row"></p>
+      <p class="status" role="status" data-i18n="player.nextComing">Next question coming up…</p>
     </main>
 
     <main class="card" id="podium" hidden>
-      <h1>🏆 Game over!</h1>
-      <p id="rank-podium" class="pin"></p>
-      <p id="score-podium"></p>
+      <h1 data-i18n="player.gameOver">🏆 Game over!</h1>
+      <p id="rank-podium" class="rank-line"></p>
+      <p id="score-podium" class="avatar-row"></p>
     </main>
 
+    <!-- i18n.js must load first: the pages' modules use its global API. -->
+    <script src="/i18n.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/player.js" type="module"></script>
   </body>

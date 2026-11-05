@@ -15,16 +15,35 @@ import { isSea } from 'node:sea';
  * escape public/ or data/.
  */
 export const SEA_ASSET_KEYS = [
+  'public/dashboard.html',
+  'public/dashboard.js',
+  'public/dashboard.css',
   'public/host.html',
   'public/host.js',
+  'public/tokens.css',
   'public/host.css',
   'public/player.html',
   'public/player.js',
+  'public/avatar.js',
+  'public/i18n.js',
+  'public/login.html',
+  'public/login.js',
+  'public/login.css',
   'public/editor.html',
   'public/editor.js',
   'public/editor.css',
   'public/question-defaults.js',
   'public/question-defaults.d.ts',
+  // Self-hosted display font (admin-dashboard issue 05): Montserrat woff2
+  // subsets, unicode-range latin + latin-ext, weights 400/700/800. Served to
+  // the pages like tokens.css — fonts are PUBLIC assets (issue 03's asset
+  // split; login page loads them before any session exists).
+  'public/fonts/montserrat-latin-400-normal.woff2',
+  'public/fonts/montserrat-latin-700-normal.woff2',
+  'public/fonts/montserrat-latin-800-normal.woff2',
+  'public/fonts/montserrat-latin-ext-400-normal.woff2',
+  'public/fonts/montserrat-latin-ext-700-normal.woff2',
+  'public/fonts/montserrat-latin-ext-800-normal.woff2',
   'data/quizzes/seed.json',
 ] as const;
 
@@ -36,18 +55,20 @@ export const SEA_SEED_ASSET_KEY: SeaAssetKey = 'data/quizzes/seed.json';
 const SEA_KEY_SET: ReadonlySet<string> = new Set(SEA_ASSET_KEYS);
 const SEA_PUBLIC_PREFIX = 'public/';
 
-/** URL routes for the three app pages and the public file behind each. */
+/** URL routes for the app pages and the public file behind each. */
 const SEA_PAGE_ROUTES: Readonly<Record<string, SeaAssetKey>> = {
-  '/': 'public/host.html',
+  '/': 'public/dashboard.html',
+  '/login': 'public/login.html',
   '/play': 'public/player.html',
   '/editor': 'public/editor.html',
+  '/host': 'public/host.html',
 };
 
 /**
- * Maps a decoded URL path to an embedded asset key. Only the three page
- * routes and requests for the exact files listed in SEA_ASSET_KEYS are
- * accepted; everything else (API routes, traversal like /../, unknown names)
- * returns null so the caller can 404 or fall through.
+ * Maps a decoded URL path to an embedded asset key. Only the page routes and
+ * requests for the exact files listed in SEA_ASSET_KEYS are accepted;
+ * everything else (API routes, traversal like /../, unknown names) returns
+ * null so the caller can 404 or fall through.
  */
 export function publicPathToAssetKey(urlPath: string): SeaAssetKey | null {
   const pageRoute = SEA_PAGE_ROUTES[urlPath];

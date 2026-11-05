@@ -3,72 +3,97 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Offline Kahoot — Host</title>
+    <title data-i18n="app.title.host">Offline Kahoot — Host</title>
+    <link rel="stylesheet" href="/tokens.css" />
     <link rel="stylesheet" href="/host.css" />
   </head>
-  <body>
-    <main class="card" id="view-lobby">
-      <h1>Join the game</h1>
+  <body class="bg-kahoot">
+    <main class="card card-wide" id="view-lobby">
+      <header class="card-head">
+        <a href="/" class="back-link" data-i18n="host.dashboard">‹ Dashboard</a>
+        <h1 data-i18n="host.join">Join the game</h1>
+        <p id="status" class="status" role="status">starting…</p>
+      </header>
 
-      <p id="status" class="status">starting…</p>
+      <div class="lobby-grid">
+        <section class="panel" aria-label="Join details" data-i18n-attr="aria-label:host.join">
+          <p class="label" data-i18n="host.joinUrl">Join URL</p>
+          <p><a id="join-url" class="join-url" href="#"></a></p>
 
-      <p class="label">Join URL</p>
-      <p><a id="join-url" class="join-url" href="#"></a></p>
+          <p class="label" data-i18n="host.pin">PIN</p>
+          <p id="pin" class="pin"></p>
 
-      <p class="label">PIN</p>
-      <p id="pin" class="pin"></p>
+          <p class="label" data-i18n="host.scan">Scan to join</p>
+          <img
+            id="qr"
+            class="qr"
+            alt="QR code with the join URL"
+            data-i18n-attr="alt:host.qrAlt"
+            hidden
+          />
+        </section>
 
-      <p class="label">Scan to join</p>
-      <img id="qr" class="qr" alt="QR code with the join URL" hidden />
+        <section class="panel">
+          <p class="label">
+            <span data-i18n="host.players">Players</span>
+            <span id="player-count"></span>
+          </p>
+          <ul id="players" class="players" data-i18n-attr="aria-label:player.players"></ul>
+          <p id="players-empty" class="empty" hidden data-i18n="host.lobbyEmpty">
+            Waiting for players to join — share the PIN or the QR code.
+          </p>
 
-      <p class="label">Players <span id="player-count"></span></p>
-      <ul id="players" class="players"></ul>
+          <!-- Quiz selection moved to the dashboard cards (issue 04); the
+               lobby shows the loaded quiz and the final start control. -->
+          <p class="label" data-i18n="host.quiz">Quiz</p>
+          <p id="quiz-name" class="quiz-name">&nbsp;</p>
 
-      <p class="label">Quiz</p>
-      <p>
-        <select id="quiz-select" class="quiz-select">
-          <option value="" disabled selected>Choose a quiz…</option>
-        </select>
-      </p>
-      <p id="quiz-status" class="status"></p>
-      <p>
-        <a id="quiz-export" href="#" download hidden>Export selected quiz</a>
-        <label for="quiz-import" class="label-inline">Import quiz</label>
-        <input type="file" id="quiz-import" accept=".json,application/json" hidden />
-      </p>
-
-      <button id="start" class="player-button" disabled>Start game</button>
+          <button id="start" class="player-button" disabled data-i18n="host.startGame">
+            Start game
+          </button>
+        </section>
+      </div>
     </main>
 
     <main class="card" id="view-question" hidden>
-      <p class="label"><span id="quiz-title"></span> — Question <span id="question-number"></span></p>
+      <p class="label">
+        <span id="quiz-title"></span> —
+        <span data-i18n="word.question">Question</span>
+        <span id="question-number"></span>
+      </p>
       <h1 id="question-prompt"></h1>
       <ol id="question-options" class="answers"></ol>
-      <p class="label">Time left</p>
+      <p class="label" data-i18n="host.timeLeft">Time left</p>
       <p id="countdown" class="countdown"></p>
-      <button id="reveal" class="player-button">Reveal answer</button>
+      <button id="reveal" class="player-button" data-i18n="host.reveal">Reveal answer</button>
     </main>
 
     <main class="card" id="view-reveal" hidden>
-      <h1>Correct answer</h1>
-      <p id="correct-answer" class="pin"></p>
-      <p class="label">Answered correctly</p>
-      <ul id="correct-players" class="players"></ul>
-      <button id="next" class="player-button">Next</button>
+      <h1 data-i18n="host.correctAnswer">Correct answer</h1>
+      <p id="correct-answer" class="correct-answer"></p>
+      <p class="label" data-i18n="host.answeredCorrectly">Answered correctly</p>
+      <ul id="correct-players" class="players" data-i18n-attr="aria-label:host.answeredCorrectly"></ul>
+      <button id="next" class="player-button" data-i18n="host.next">Next</button>
     </main>
 
     <main class="card" id="view-leaderboard" hidden>
-      <h1>Leaderboard</h1>
-      <ol id="leaderboard" class="players"></ol>
-      <button id="leaderboard-next" class="player-button">Next question</button>
+      <h1 data-i18n="host.leaderboard">Leaderboard</h1>
+      <ol id="leaderboard" class="players" data-i18n-attr="aria-label:host.leaderboard"></ol>
+      <button id="leaderboard-next" class="player-button" data-i18n="host.nextQuestion">
+        Next question
+      </button>
     </main>
 
     <main class="card" id="view-podium" hidden>
-      <h1>🏆 Podium</h1>
-      <ol id="podium" class="players"></ol>
-      <button id="end-game" class="player-button">Back to lobby</button>
+      <h1 data-i18n="host.podium">🏆 Podium</h1>
+      <ol id="podium" class="players" data-i18n-attr="aria-label:host.podium"></ol>
+      <button id="end-game" class="player-button" data-i18n="host.backToLobby">
+        Back to dashboard
+      </button>
     </main>
 
+    <!-- i18n.js must load first: the pages' modules use its global API. -->
+    <script src="/i18n.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/host.js" type="module"></script>
   </body>

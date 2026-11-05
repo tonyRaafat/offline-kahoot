@@ -50,12 +50,12 @@ const Q2_DEADLINE = 1_032_000; // next atMs 1_012_000 + 20 * 1000
 
 function lobbyWith(
   quiz: Quiz,
-  roster: Array<[playerId: string, name: string]>,
+  roster: Array<[playerId: string, name: string, color?: import('./avatar-colors.js').AvatarColor]>,
 ): GameState {
   let state = createInitialGame(quiz);
   let atMs = START_AT;
-  for (const [playerId, name] of roster) {
-    state = reduce(state, { type: 'playerJoin', playerId, name, atMs }).state;
+  for (const [playerId, name, color = 'red'] of roster) {
+    state = reduce(state, { type: 'playerJoin', playerId, name, color, atMs }).state;
     atMs += 1000;
   }
   return state;
@@ -82,35 +82,57 @@ describe('createInitialGame', () => {
 });
 
 describe('playerJoin', () => {
-  it('adds a player with the given nickname and join timestamp', () => {
-    const state = lobbyWith(QUIZ, [['p1', 'Alice']]);
+  it('adds a player with the given nickname, color and join timestamp', () => {
+    const state = lobbyWith(QUIZ, [
+      ['p1', 'Alice', 'blue'],
+      ['p2', 'Bob', 'yellow'],
+    ]);
     expect(state.players).toEqual([
-      { id: 'p1', name: 'Alice', joinedAtMs: 1_000_000 },
+      { id: 'p1', name: 'Alice', color: 'blue', joinedAtMs: 1_000_000 },
+      { id: 'p2', name: 'Bob', color: 'yellow', joinedAtMs: 1_001_000 },
     ]);
   });
 
-  it('auto-suffixes duplicate nicknames: Tony -> Tony-2 -> Tony-3', () => {
+  it('records a duplicate-looking nickname verbatim (uniqueness is enforced at the socket layer, NOT auto-suffixed here)', () => {
     const state = lobbyWith(QUIZ, [
-      ['p1', 'Tony'],
-      ['p2', 'Tony'],
-      ['p3', 'Tony'],
+      ['p1', 'Tony', 'red'],
+      ['p2', 'Tony', 'grey'],
     ]);
-    expect(state.players.map((p) => p.name)).toEqual(['Tony', 'Tony-2', 'Tony-3']);
+    expect(state.players.map((p) => ({ name: p.name, color: p.color }))).toEqual([
+      { name: 'Tony', color: 'red' },
+      { name: 'Tony', color: 'grey' },
+    ]);
   });
 
   it('ignores joins once the quiz has started', () => {
-    let state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    let state = start(lobbyWith(QUIZ, [['p1', 'Alice', 'green']]));
     const before = state;
     const { state: after, effects } = reduce(state, {
       type: 'playerJoin',
       playerId: 'p2',
       name: 'Late Larry',
+      color: 'pink',
       atMs: 1_002_000,
     });
     state = after;
     expect(state.players.map((p) => p.id)).toEqual(['p1']);
     expect(state).toEqual(before);
     expect(effects).toEqual([]);
+  });
+
+  it('keeps the stored color through later dispatches and the final roster wipe of scores', () => {
+    // Color persists across the whole game: startQuiz doesn't rebuild players,
+    // and `end` returns to the lobby keeping the roster (name + color intact).
+    let state = lobbyWith(QUIZ, [['p1', 'Ada', 'orange']]);
+    state = start(state, START_AT);
+    expect(state.players[0]).toEqual({
+      id: 'p1',
+      name: 'Ada',
+      color: 'orange',
+      joinedAtMs: 1_000_000,
+    });
+    state = reduce(state, { type: 'end' }).state;
+    expect(state.players[0]?.color).toBe('orange');
   });
 });
 
@@ -538,8 +560,8 @@ describe('end', () => {
 describe('purity and determinism', () => {
   it('is deterministic: the same event sequence yields identical results', () => {
     const events = [
-      { type: 'playerJoin', playerId: 'p1', name: 'Tony', atMs: 1_000_000 },
-      { type: 'playerJoin', playerId: 'p2', name: 'Tony', atMs: 1_000_100 },
+      { type: 'playerJoin', playerId: 'p1', name: 'Tony', color: 'red', atMs: 1_000_000 },
+      { type: 'playerJoin', playerId: 'p2', name: 'Tony', color: 'blue', atMs: 1_000_100 },
       { type: 'startQuiz', atMs: 1_001_000 },
       { type: 'playerAnswer', playerId: 'p1', answerIndex: 1, atMs: 1_002_000 },
       { type: 'reveal' },
@@ -566,7 +588,7 @@ describe('purity and determinism', () => {
       atMs: 1_002_000,
     });
     reduce(initial, { type: 'reveal' });
-    reduce(initial, { type: 'playerJoin', playerId: 'p3', name: 'Cara', atMs: 1_009_000 });
+    reduce(initial, { type: 'playerJoin', playerId: 'p3', name: 'Cara', color: 'green', atMs: 1_009_000 });
     expect(initial).toEqual(snapshot);
   });
 });

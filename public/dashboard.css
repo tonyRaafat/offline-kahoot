@@ -1,0 +1,287 @@
+/* dashboard.css — the quiz-management dashboard page (admin-dashboard 04).
+ * Issue 05 adds the Kahoot layer: tilted sticker count, hover/press
+ * micro-interactions on the quiz cards, staggered entrance, live-banner
+ * pulse — all token-paced, all disabled by prefers-reduced-motion via the
+ * zeroed motion tokens / no-preference gates. */
+
+.dashboard-card {
+  max-width: 64rem;
+}
+
+/* Quiz-card column sizing token (issue 01): the smallest comfortable card
+ * column; the grid never goes below it and rows split evenly above it. */
+:root {
+  --quiz-card-min: 17rem;
+}
+
+/* ---------- Header row: title + logout ---------- */
+
+.dash-head {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.dash-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.dash-head h1 {
+  margin-bottom: 0;
+}
+
+/* Undo host.css' centered logout (it was parked lobby-style there). */
+.dashboard-card .logout-link {
+  display: inline-block;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  color: var(--ink-muted);
+}
+
+/* ---------- Live-game banner ---------- */
+
+.live-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--neon-soft);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    filter var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.live-banner:hover {
+  border-color: var(--neon);
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+}
+
+.live-banner:active {
+  transform: translateY(0);
+  transition-timing-function: var(--ease-spring);
+}
+
+/* The "it's live" pulse: only runs when motion is welcome. */
+.live-banner::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--neon);
+  box-shadow: 0 0 0 0 rgb(26 255 176 / 0.5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .live-banner::before {
+    animation: live-pulse 2.4s var(--ease-in-out) infinite;
+  }
+
+  @keyframes live-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(26 255 176 / 0.45);
+    }
+    50% {
+      box-shadow: 0 0 0 7px rgb(26 255 176 / 0);
+    }
+  }
+}
+
+.live-banner::after {
+  content: '→';
+  margin-inline-start: auto;
+  color: var(--neon);
+  font-weight: 800;
+}
+
+html[dir='rtl'] .live-banner::after {
+  content: '←'; /* mirror the affordance arrow in Arabic */
+}
+
+/* ---------- Create row ---------- */
+
+.create-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-5);
+}
+
+.create-row .player-input {
+  flex: 1 1 14rem;
+  width: auto;
+}
+
+.create-row .player-button {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+/* ---------- Quiz card grid ---------- */
+
+.quiz-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-4);
+  /* auto-fill (not auto-fit): empty tracks in a partial last row stay
+   * reserved, so late-row cards keep the exact column width of the first
+   * rows (issue 01: fully uniform cards). */
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(var(--quiz-card-min), 100%), 1fr)
+  );
+}
+
+.quiz-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  /* Same card treatment as host.css' .card (issue 01): --r-xl radius and
+   * the --space-card padding rhythm, so dashboard and phase cards read as
+   * one system. */
+  padding: var(--space-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-sunken);
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+/* Hover / press micro-interactions (issue 05): a small lift with a
+ * barely-there counter-tilt — enough to feel physical without wobbling.
+ * Center-based transforms only, so it stays dir-symmetric in RTL. */
+.quiz-card:hover {
+  transform: translateY(-3px) rotate(-0.35deg);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.quiz-card:active {
+  transform: translateY(-1px) scale(0.995);
+  transition-timing-function: var(--ease-spring);
+}
+
+.quiz-card:focus-within {
+  border-color: var(--neon);
+}
+
+.quiz-card-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  /* Two lines, no more: long titles ellipsize (the full title rides along
+   * as the card's title attribute). The reserved second line is what keeps
+   * every card the same height (issue 01). */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  min-height: 2.5em; /* exactly 2 lines at the 1.25 line-height */
+}
+
+/* The question count as a tilted sticker chip — sparing (one per card).
+ * Gold on night-purple, matching the Kahoot accent palette. */
+.quiz-card-count {
+  display: inline-block;
+  align-self: start;
+  margin: 0 0 var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  background: var(--gold);
+  color: var(--gold-ink);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  border-radius: var(--r-pill);
+  transform: rotate(-1.6deg);
+}
+
+.quiz-card-actions {
+  margin-top: auto;
+  display: grid;
+  gap: var(--space-control); /* comfortable control gap, was 0.5rem */
+}
+
+/* Card buttons are compact, unlike the full-width phase-screen buttons —
+ * but both danger and normal use the same compact control height (issue 01). */
+.quiz-card .player-button {
+  width: auto;
+  min-height: var(--control-h-sm);
+  font-size: var(--fs-base);
+}
+
+.quiz-card-overflow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-2);
+}
+
+/* The Export link carries the quiz title in its text; it truncates instead
+ * of wrapping so Export + Delete always share one row and every card keeps
+ * the same height (issue 01 review fix). */
+.quiz-card-overflow .label-inline {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiz-card-overflow .player-button.danger {
+  /* compact danger chip */
+  width: auto;
+  min-height: var(--control-h-sm);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+  border-radius: var(--r-pill);
+}
+
+/* Small screens: single column; the create row stacks. */
+@media (max-width: 430px) {
+  .create-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ---------- Entrance: staggered card settle (issue 05) ----------
+ * One orchestrated page-load moment; delays are small multiples of the
+ * motion token so reduced motion (0ms) collapses it all to instant. */
+@media (prefers-reduced-motion: no-preference) {
+  .quiz-cards > li {
+    animation: quiz-card-in var(--motion-enter) var(--ease-out) backwards;
+  }
+  .quiz-cards > li:nth-child(2) { animation-delay: calc(6 * var(--motion-fast)); }
+  .quiz-cards > li:nth-child(3) { animation-delay: calc(12 * var(--motion-fast)); }
+  .quiz-cards > li:nth-child(4) { animation-delay: calc(18 * var(--motion-fast)); }
+  .quiz-cards > li:nth-child(n + 5) { animation-delay: calc(24 * var(--motion-fast)); }
+
+  @keyframes quiz-card-in {
+    from {
+      opacity: 0;
+      transform: translateY(14px) rotate(0.6deg);
+    }
+  }
+}

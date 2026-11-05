@@ -1,7 +1,12 @@
 // Host gameplay page: this socket claims the host role once per connection,
 // drives the game (hostStart / reveal / next) and renders every phase from the
-// pushed StateView plus the `reveal` payloads. The lobby markup keeps serving
-// the join URL / PIN / QR / roster flow.
+// pushed StateView plus the `reveal` payloads. The lobby markup serves the
+// join URL / PIN / QR / roster flow; quiz selection lives on the dashboard.
+
+import { makeAvatar } from '/avatar.js';
+
+// i18n.js (plain script, loaded before this module) provides the globals.
+const { t, set, clear, onChange } = window.I18n;
 
 const showStatus = async () => {
   const status = document.getElementById('status');
@@ -19,9 +24,9 @@ const showStatus = async () => {
     pin.textContent = session.pin;
     qr.src = session.qrDataUrl;
     qr.hidden = false;
-    status.textContent = '';
+    clear(status);
   } catch (err) {
-    status.textContent = `host page failed to load session: ${err.message}`;
+    set(status, 'host.failedSession', { detail: err.message });
   }
 };
 
@@ -38,6 +43,7 @@ const cards = {
 const rosterEl = document.getElementById('players');
 const playerCountEl = document.getElementById('player-count');
 const startButton = document.getElementById('start');
+const quizNameEl = document.getElementById('quiz-name');
 const quizTitleEl = document.getElementById('quiz-title');
 const questionNumberEl = document.getElementById('question-number');
 const questionPromptEl = document.getElementById('question-prompt');
@@ -52,15 +58,38 @@ const leaderboardEl = document.getElementById('leaderboard');
 const podiumEl = document.getElementById('podium');
 const endGameButton = document.getElementById('end-game');
 
-const socket = io();
+// Same-origin socket: withCredentials sends the HttpOnly admin session
+// cookie in the handshake — required to claim the `host` role (issue 03).
+const socket = io({ withCredentials: true });
 
 let latestView = null; // last `state` StateView
 let revealData = null; // last `reveal` payload
 let lastQuestion = null; // CurrentQuestionView shown before the reveal
 let countdownTimer = null;
+let currentPhase = null; // last phase shown; drives the entrance animation
+// Podium "Back to lobby" sets this; the confirming lobby `state` (server endGame
+// reset landed) then navigates to the dashboard (issue 04) instead of re-showing
+// the local lobby view. Declared up top with the other view state — the
+// `socket.on('state')` handler reads it and must see the same binding.
+let leaveToDashboard = false;
 
+/** Shows exactly the phase's card; when the card just became visible (a phase
+ *  change, not a re-render of the phase we're already on) its wrapper gets
+ *  the .phase-enter entrance re-triggered (issue 05). Only the wrapper
+ *  animates — the leaderboard/podium rows inside keep their own stable,
+ *  playerId-keyed animation contract (ux-04), a new state wins immediately
+ *  because show() re-runs the swap synchronously before any repaint. */
 function show(phase) {
-  for (const [name, card] of Object.entries(cards)) card.hidden = name !== phase;
+  for (const [name, card] of Object.entries(cards)) {
+    const wasHidden = card.hidden;
+    card.hidden = name !== phase;
+    if (name === phase && wasHidden && currentPhase !== phase) {
+      card.classList.remove('phase-enter');
+      void card.offsetWidth; // restart the CSS animation on purpose
+      card.classList.add('phase-enter');
+    }
+  }
+  currentPhase = phase;
 }
 
 function stopCountdown() {
@@ -82,25 +111,61 @@ function startCountdown(timerDeadline) {
   countdownTimer = setInterval(tick, 250);
 }
 
-/** Player-id -> name lookup from the roster within the current StateView. */
-function playerNames(view) {
-  const names = new Map();
-  for (const player of view.players) names.set(player.id, player.name);
-  return names;
+/** Player-id -> PlayerView lookup from the roster within the current StateView. */
+function playersById(view) {
+  const byId = new Map();
+  for (const player of view.players) byId.set(player.id, player);
+  return byId;
 }
 
 function nameOf(names, playerId, fallback = '?') {
-  return names.get(playerId) ?? fallback;
+  return names.get(playerId)?.name ?? fallback;
+}
+
+/** Renders every phase from a StateView; called on `state` and on a language
+ *  switch (which must re-render the current screen). */
+function dispatchView(view) {
+  switch (view.phase) {
+    case 'lobby':
+      renderLobby(view);
+      break;
+    case 'question':
+      renderQuestion(view);
+      break;
+    case 'reveal':
+      stopCountdown();
+      renderReveal(view);
+      break;
+    case 'leaderboard':
+      stopCountdown();
+      show('leaderboard');
+      leaderboardNextButton.disabled = false;
+      renderScoredList(leaderboardEl, view, playersById(view));
+      break;
+    case 'podium':
+      stopCountdown();
+      show('podium');
+      endGameButton.disabled = false;
+      renderScoredList(podiumEl, view, playersById(view), 3);
+      break;
+  }
 }
 
 function renderLobby(view) {
   stopCountdown();
   show('lobby');
+  // The lobby only displays the loaded quiz; selection lives on the dashboard.
+  quizNameEl.textContent = view.quizTitle ?? '—';
   playerCountEl.textContent = view.players.length > 0 ? ` (${view.players.length})` : '';
+  document.getElementById('players-empty').hidden = view.players.length > 0;
   rosterEl.replaceChildren(
     ...view.players.map((player) => {
       const li = document.createElement('li');
-      li.textContent = player.name;
+      // Stable, playerId-derived row key: the issue-04 FLIP animation targets
+      // these rows by id/data-player-id instead of rebuilding the list.
+      li.id = `roster-${player.id}`;
+      li.dataset.playerId = player.id;
+      li.append(makeAvatar(player.name, player.color), player.name);
       return li;
     }),
   );
@@ -118,8 +183,10 @@ function renderQuestion(view) {
   questionNumberEl.textContent = String(question.questionIndex + 1);
   questionPromptEl.textContent = question.prompt;
   questionOptionsEl.replaceChildren(
-    ...question.options.map((option) => {
+    ...question.options.map((option, answerIndex) => {
       const li = document.createElement('li');
+      // Answer tile colors keyed by option index (tokens.css palette).
+      li.dataset.answerIndex = String(answerIndex);
       li.textContent = option;
       return li;
     }),
@@ -132,24 +199,45 @@ function renderReveal(view) {
   show('reveal');
   nextButton.disabled = false;
   correctAnswerEl.textContent =
-    lastQuestion?.options[revealData.correctIndex] ?? `Option ${revealData.correctIndex + 1}`;
-  const names = playerNames(view);
+    lastQuestion?.options[revealData.correctIndex] ?? t('host.option', { number: revealData.correctIndex + 1 });
+  const names = playersById(view);
   correctPlayersEl.replaceChildren(
     ...revealData.results
       .filter((result) => result.correct)
       .map((result) => {
+        const player = names.get(result.playerId);
         const li = document.createElement('li');
-        li.textContent = nameOf(names, result.playerId);
+        li.id = `reveal-${result.playerId}`;
+        li.dataset.playerId = result.playerId;
+        li.append(
+          makeAvatar(player?.name ?? '?', player?.color),
+          nameOf(names, result.playerId),
+        );
         return li;
       }),
   );
 }
 
+/** Rank rows (leaderboard/podium). Rows are keyed by playerId (id +
+ *  data-player-id) — issue 04 reorders these DOM nodes via FLIP. */
 function renderScoredList(el, view, names, limit = Infinity) {
   el.replaceChildren(
-    ...view.leaderboard.slice(0, limit).map((playerId) => {
+    ...view.leaderboard.slice(0, limit).map((playerId, index) => {
+      const player = names.get(playerId);
       const li = document.createElement('li');
-      li.textContent = `${nameOf(names, playerId)} — ${view.scores[playerId] ?? 0} pts`;
+      li.id = `lb-${playerId}`;
+      li.dataset.playerId = playerId;
+      li.className = 'row';
+      const rank = document.createElement('span');
+      rank.className = 'row-rank';
+      rank.textContent = String(index + 1);
+      const name = document.createElement('span');
+      name.className = 'row-name';
+      name.textContent = nameOf(names, playerId);
+      const score = document.createElement('span');
+      score.className = 'row-score';
+      score.textContent = t('word.points', { points: view.scores[playerId] ?? 0 });
+      li.append(rank, makeAvatar(player?.name ?? '?', player?.color), name, score);
       return li;
     }),
   );
@@ -164,30 +252,14 @@ socket.on('connect', () => {
 
 socket.on('state', (view) => {
   latestView = view;
-  switch (view.phase) {
-    case 'lobby':
-      renderLobby(view);
-      break;
-    case 'question':
-      renderQuestion(view);
-      break;
-    case 'reveal':
-      stopCountdown();
-      renderReveal(view);
-      break;
-    case 'leaderboard':
-      stopCountdown();
-      show('leaderboard');
-      leaderboardNextButton.disabled = false;
-      renderScoredList(leaderboardEl, view, playerNames(view));
-      break;
-    case 'podium':
-      stopCountdown();
-      show('podium');
-      endGameButton.disabled = false;
-      renderScoredList(podiumEl, view, playerNames(view), 3);
-      break;
+  // Podium "Back to lobby" leaves the game view: once the server's endGame
+  // reset lands (back at the lobby — roster kept, scores cleared, results
+  // saved), the browser navigates to the dashboard (issue 04).
+  if (leaveToDashboard && view.phase === 'lobby') {
+    leaveTo('/');
+    return;
   }
+  dispatchView(view);
 });
 
 socket.on('reveal', (payload) => {
@@ -203,83 +275,13 @@ startButton.addEventListener('click', () => {
   }, 3000);
 });
 
-// ---- Host quiz picker: list / select / import / export ---------------------
+// ---- Host lobby (selection/import/export moved to the dashboard, issue 04) ---
 
-const quizSelect = document.getElementById('quiz-select');
-const quizExportLink = document.getElementById('quiz-export');
-const quizImportInput = document.getElementById('quiz-import');
-const quizStatus = document.getElementById('quiz-status');
-
-let quizzes = [];
-
-async function refreshQuizzes() {
-  try {
-    const res = await fetch('/api/quizzes');
-    if (!res.ok) throw new Error(`quizzes API returned ${res.status}`);
-    quizzes = await res.json();
-    quizSelect.replaceChildren(
-      ...quizzes.map((quiz) => {
-        const option = document.createElement('option');
-        option.value = quiz.id;
-        option.textContent = `${quiz.title} (${quiz.questionCount} questions)`;
-        return option;
-      }),
-    );
-    quizSelect.selectedIndex = 0;
-  } catch (err) {
-    quizStatus.textContent = `Failed to list quizzes: ${err.message}`;
-  }
-}
-
-const selectedQuiz = () => quizzes.find((quiz) => quiz.id === quizSelect.value);
-
-// Selecting a quiz loads it into the live lobby; already-joined players are
-// kept by the server, and the next "state" broadcast reflects the new quiz.
-quizSelect.addEventListener('change', async () => {
-  const quiz = selectedQuiz();
-  if (!quiz) return;
-  quizExportLink.hidden = true;
-  try {
-    const res = await fetch('/api/game/quiz', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quizId: quiz.id }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error ?? `quiz API returned ${res.status}`);
-    quizStatus.textContent = `Loaded quiz: ${body.title} (${body.questionCount} questions)`;
-    if (selectedQuiz()) {
-      quizExportLink.href = `/api/quizzes/${encodeURIComponent(quiz.id)}/export`;
-      quizExportLink.textContent = `Export "${quiz.title}"`;
-      quizExportLink.hidden = false;
-    }
-  } catch (err) {
-    quizStatus.textContent = `Failed to load quiz: ${err.message}`;
-  }
+// Language switch: static data-i18n strings are re-applied by i18n.js itself;
+// here we re-render what this page generates from JS.
+onChange(() => {
+  if (latestView) dispatchView(latestView);
 });
-
-quizImportInput.addEventListener('change', async () => {
-  const file = quizImportInput.files?.[0];
-  quizImportInput.value = '';
-  if (!file) return;
-  try {
-    const res = await fetch('/api/quizzes/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: await file.text(),
-    });
-    const body = await res.json();
-    if (!res.ok) {
-      throw new Error(body.errors?.join('; ') ?? body.error ?? `import API returned ${res.status}`);
-    }
-    quizStatus.textContent = `Imported quiz: ${body.title}`;
-    await refreshQuizzes();
-  } catch (err) {
-    quizStatus.textContent = `Import failed: ${err.message}`;
-  }
-});
-
-refreshQuizzes();
 
 revealButton.addEventListener('click', () => {
   revealButton.disabled = true;
@@ -305,12 +307,21 @@ leaderboardNextButton.addEventListener('click', () => {
   }, 3000);
 });
 
-// Back to lobby: asks the server to dispatch the engine's `end` event — the
-// roster is kept, scores reset, and the results of the finished game are saved.
+// Back to lobby: keeps the existing endGame reset sequence (server resets to
+// lobby, keeps the roster, clears scores, saves the results file) and then
+// navigates to the dashboard instead of re-showing this page's lobby view.
+// Navigation goes through the shared leave transition (tokens.css: the
+// html.leaving fade); reduced motion collapses it to an instant swap.
 endGameButton.addEventListener('click', () => {
   endGameButton.disabled = true;
+  leaveToDashboard = true;
   socket.emit('endGame');
-  setTimeout(() => {
-    if (latestView?.phase === 'podium') endGameButton.disabled = false;
-  }, 3000);
 });
+
+/** Navigates through the page-leave fade (see tokens.css). */
+function leaveTo(href) {
+  document.documentElement.classList.add('leaving');
+  window.setTimeout(() => {
+    window.location.href = href;
+  }, 120);
+}

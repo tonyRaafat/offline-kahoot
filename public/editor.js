@@ -4,9 +4,13 @@
 // the server stays authoritative and its error list is displayed verbatim.
 import { newQuestion } from '/question-defaults.js';
 
+// i18n.js (plain script, loaded before this module) provides the globals.
+const { t, set, clear, onChange } = window.I18n;
+
 const viewPick = document.getElementById('view-pick');
 const viewEdit = document.getElementById('view-edit');
 const quizSelect = document.getElementById('quiz-select');
+const editorEmptyEl = document.getElementById('editor-empty');
 const newTitleEl = document.getElementById('new-title');
 const createButton = document.getElementById('create');
 const pickStatus = document.getElementById('pick-status');
@@ -15,6 +19,9 @@ const renameButton = document.getElementById('rename');
 const deleteButton = document.getElementById('delete');
 const backButton = document.getElementById('back');
 const questionsEl = document.getElementById('questions');
+// The grid-gap container (issue 01): cards share the list's gap instead of
+// carrying their own margins.
+questionsEl.classList.add('questions-list');
 const addQuestionButton = document.getElementById('add-question');
 const saveButton = document.getElementById('save');
 const errorsEl = document.getElementById('errors');
@@ -40,38 +47,39 @@ async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
-function showPick(statusText = '') {
+function showPick() {
   currentId = null;
   currentQuiz = null;
   viewEdit.hidden = true;
   viewPick.hidden = false;
-  pickStatus.textContent = statusText;
   void refreshQuizzes();
 }
 
-function showEdit(statusText = '') {
+function showEdit() {
   viewPick.hidden = true;
   viewEdit.hidden = false;
-  editStatus.textContent = statusText;
   errorsEl.replaceChildren();
 }
 
 async function refreshQuizzes() {
   try {
     const quizzes = await api('/api/quizzes');
+    // The picker's empty state was wired up by the paid-review fix: show it
+    // when the fetched list is genuinely empty (mirrors the dashboard's).
+    editorEmptyEl.hidden = quizzes.length > 0;
     const keep = quizSelect.value;
     quizSelect.replaceChildren(
       ...quizzes.map((quiz) => {
         const option = document.createElement('option');
         option.value = quiz.id;
-        option.textContent = `${quiz.title} (${quiz.questionCount} questions)`;
+        option.textContent = t('common.quizCount', { title: quiz.title, count: quiz.questionCount });
         return option;
       }),
     );
     if (keep && quizzes.some((quiz) => quiz.id === keep)) quizSelect.value = keep;
     else quizSelect.selectedIndex = 0;
   } catch (err) {
-    pickStatus.textContent = `Failed to list quizzes: ${err.message}`;
+    set(pickStatus, 'editor.failedList', { detail: err.message });
   }
 }
 
@@ -79,7 +87,8 @@ async function openQuiz(id) {
   try {
     currentQuiz = await api(`/api/quizzes/${encodeURIComponent(id)}`);
   } catch (err) {
-    showPick(`Failed to load quiz: ${err.message}`);
+    showPick();
+    set(pickStatus, 'editor.failedLoad', { detail: err.message });
     return;
   }
   currentId = id;
@@ -102,11 +111,11 @@ function questionCard(question, index) {
   card.className = 'question-card';
 
   const heading = document.createElement('h3');
-  heading.textContent = `Question ${index + 1}`;
+  heading.textContent = t('editor.question', { number: index + 1 });
   const removeQuestion = document.createElement('button');
   removeQuestion.className = 'remove-question';
   removeQuestion.textContent = '✕';
-  removeQuestion.title = 'Remove this question';
+  removeQuestion.title = t('editor.removeQuestion');
   removeQuestion.addEventListener('click', () => {
     currentQuiz.questions.splice(index, 1);
     renderQuestions();
@@ -116,7 +125,7 @@ function questionCard(question, index) {
 
   const promptLabel = document.createElement('label');
   promptLabel.className = 'field-label';
-  promptLabel.textContent = 'Prompt';
+  promptLabel.textContent = t('editor.prompt');
   const prompt = document.createElement('input');
   prompt.className = 'ed-input';
   prompt.value = question.prompt;
@@ -129,13 +138,15 @@ function questionCard(question, index) {
   const settingsRow = document.createElement('p');
   const typeLabel = document.createElement('label');
   typeLabel.className = 'field-label';
-  typeLabel.textContent = 'Type';
+  typeLabel.textContent = t('editor.type');
   const type = document.createElement('select');
   type.className = 'ed-input';
   for (const value of ['multiple-choice', 'true-false']) {
     const option = document.createElement('option');
     option.value = value;
-    option.textContent = value === 'true-false' ? 'true-false' : 'multiple-choice';
+    // The <option> text is localized chrome; the stored value keeps the
+    // English type identifier (quiz content stays untranslated).
+    option.textContent = value === 'true-false' ? t('editor.typeTrueFalse') : t('editor.typeMultiple');
     option.selected = question.type === value;
     type.append(option);
   }
@@ -153,7 +164,7 @@ function questionCard(question, index) {
 
   const timerLabel = document.createElement('label');
   timerLabel.className = 'field-label';
-  timerLabel.textContent = 'Timer (seconds)';
+  timerLabel.textContent = t('editor.timer');
   const timer = document.createElement('input');
   timer.className = 'ed-input short';
   timer.type = 'number';
@@ -171,7 +182,7 @@ function questionCard(question, index) {
   const correctLabel = document.createElement('span');
   correctLabel.className = 'field-label';
   correctLabel.textContent =
-    question.type === 'true-false' ? 'Correct answer' : 'Options (first row = correct via radio)';
+    question.type === 'true-false' ? t('editor.correctAnswer') : t('editor.optionsCorrect');
   card.append(correctLabel);
 
   question.options.forEach((_, optionIndex) => {
@@ -181,7 +192,7 @@ function questionCard(question, index) {
   if (question.type === 'multiple-choice' && question.options.length < 4) {
     const addOption = document.createElement('button');
     addOption.className = 'player-button';
-    addOption.textContent = '＋ Add option';
+    addOption.textContent = t('editor.addOption');
     addOption.addEventListener('click', () => {
       question.options.push('');
       renderQuestions();
@@ -212,7 +223,7 @@ function optionRow(question, questionIndex, optionIndex) {
     const optionText = document.createElement('input');
     optionText.className = 'ed-input';
     optionText.value = question.options[optionIndex];
-    optionText.placeholder = `Option ${optionIndex + 1}`;
+    optionText.placeholder = t('editor.option', { number: optionIndex + 1 });
     optionText.addEventListener('input', () => {
       question.options[optionIndex] = optionText.value;
     });
@@ -223,7 +234,7 @@ function optionRow(question, questionIndex, optionIndex) {
     const removeOption = document.createElement('button');
     removeOption.className = 'remove-option';
     removeOption.textContent = '✕';
-    removeOption.title = 'Remove this option';
+    removeOption.title = t('editor.removeOption');
     removeOption.addEventListener('click', () => {
       question.options.splice(optionIndex, 1);
       if (question.correctIndex === optionIndex) question.correctIndex = 0;
@@ -244,24 +255,24 @@ function optionRow(question, questionIndex, optionIndex) {
 function validationErrors(quiz) {
   const errors = [];
   if (typeof quiz.title !== 'string' || quiz.title.trim() === '') {
-    errors.push('title: must be a non-empty string');
+    errors.push(t('editor.err.title'));
   }
   quiz.questions.forEach((question, index) => {
     const n = index + 1;
     if (question.prompt.trim() === '') {
-      errors.push(`Question ${n}: prompt must be non-empty`);
+      errors.push(t('editor.err.prompt', { number: n }));
     }
     if (typeof question.timeSeconds !== 'number' || !(question.timeSeconds > 0)) {
-      errors.push(`Question ${n}: timer must be a positive number of seconds`);
+      errors.push(t('editor.err.timer', { number: n }));
     }
     const nonEmpty = question.options.filter((option) => option.trim() !== '');
     if (question.options.length < 2 || question.options.length > 4 || nonEmpty.length !== question.options.length) {
-      errors.push(`Question ${n}: needs 2–4 non-empty options`);
+      errors.push(t('editor.err.options', { number: n }));
     }
     if (
       !(question.correctIndex >= 0 && question.correctIndex < question.options.length)
     ) {
-      errors.push(`Question ${n}: needs a selected correct answer`);
+      errors.push(t('editor.err.correct', { number: n }));
     }
   });
   return errors;
@@ -282,7 +293,7 @@ async function saveQuiz() {
   const clientErrors = validationErrors(quiz);
   if (clientErrors.length > 0) {
     showErrors(clientErrors);
-    editStatus.textContent = '';
+    clear(editStatus);
     return;
   }
   saveButton.disabled = true;
@@ -290,11 +301,11 @@ async function saveQuiz() {
     await api(`/api/quizzes/${encodeURIComponent(currentId)}`, { method: 'PUT', body: quiz });
     currentQuiz.title = quiz.title;
     showErrors([]);
-    editStatus.textContent = 'Saved. The host page picks this up on its next reload.';
+    set(editStatus, 'editor.saved');
     await refreshQuizzes();
   } catch (err) {
     showErrors(err.errors ?? [err.message]);
-    editStatus.textContent = '';
+    clear(editStatus);
   } finally {
     saveButton.disabled = false;
   }
@@ -303,8 +314,8 @@ async function saveQuiz() {
 renameButton.addEventListener('click', async () => {
   const title = editTitleEl.value;
   if (title.trim() === '') {
-    showErrors(['title: must be a non-empty string']);
-    editStatus.textContent = '';
+    showErrors([t('editor.err.title')]);
+    clear(editStatus);
     return;
   }
   try {
@@ -312,23 +323,24 @@ renameButton.addEventListener('click', async () => {
       method: 'PUT',
       body: { title, questions: currentQuiz.questions },
     });
-    editStatus.textContent = `Renamed to "${title}"`;
+    set(editStatus, 'editor.renamed', { title });
     editTitleEl.value = title;
     await refreshQuizzes();
   } catch (err) {
     showErrors(err.errors ?? [err.message]);
-    editStatus.textContent = '';
+    clear(editStatus);
   }
 });
 
 deleteButton.addEventListener('click', async () => {
-  if (!confirm(`Delete quiz "${currentQuiz.title}"? This cannot be undone.`)) return;
+  if (!confirm(t('editor.deleteConfirm', { title: currentQuiz.title }))) return;
   try {
     await api(`/api/quizzes/${encodeURIComponent(currentId)}`, { method: 'DELETE' });
-    showPick(`Deleted quiz "${currentQuiz.title}"`);
+    showPick();
+    set(pickStatus, 'editor.deleted', { title: currentQuiz.title });
   } catch (err) {
     showErrors([err.message]);
-    editStatus.textContent = '';
+    clear(editStatus);
   }
 });
 
@@ -337,7 +349,7 @@ backButton.addEventListener('click', () => showPick());
 createButton.addEventListener('click', async () => {
   const title = newTitleEl.value;
   if (title.trim() === '') {
-    pickStatus.textContent = 'Give the new quiz a title first.';
+    set(pickStatus, 'editor.giveTitle');
     return;
   }
   createButton.disabled = true;
@@ -348,7 +360,7 @@ createButton.addEventListener('click', async () => {
     quizSelect.value = created.id;
     await openQuiz(created.id);
   } catch (err) {
-    pickStatus.textContent = `Create failed: ${err.message}`;
+    set(pickStatus, 'editor.createFailed', { detail: err.message });
   } finally {
     createButton.disabled = false;
   }
@@ -365,4 +377,16 @@ addQuestionButton.addEventListener('click', () => {
 
 saveButton.addEventListener('click', saveQuiz);
 
+// Language switch: static data-i18n strings are re-applied by i18n.js itself;
+// re-render what this page generates from JS (question cards, quiz options).
+onChange(() => {
+  if (currentQuiz) renderQuestions();
+  void refreshQuizzes();
+});
+
 showPick();
+
+// Honor the dashboard's deep link (admin-dashboard issue 04): /editor?id=<quiz>
+// opens straight into that quiz instead of the picker view.
+const requestedId = new URLSearchParams(window.location.search).get('id');
+if (requestedId) void openQuiz(requestedId);

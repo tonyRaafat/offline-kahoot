@@ -16,8 +16,8 @@ describe('stateView', () => {
         state: {
           ...base,
           players: [
-            { id: 'p1', name: 'Tony', joinedAtMs: 1 },
-            { id: 'p2', name: 'Tony-2', joinedAtMs: 2 },
+            { id: 'p1', name: 'Tony', color: 'red' as const, joinedAtMs: 1 },
+            { id: 'p2', name: 'Tony', color: 'blue' as const, joinedAtMs: 2 },
           ],
           scores: { p1: 100 },
         },
@@ -28,13 +28,33 @@ describe('stateView', () => {
       phase: 'lobby',
       quizTitle: 'Trivia Night',
       players: [
-        { id: 'p1', name: 'Tony' },
-        { id: 'p2', name: 'Tony-2' },
+        { id: 'p1', name: 'Tony', color: 'red' },
+        { id: 'p2', name: 'Tony', color: 'blue' },
       ],
       scores: { p1: 100 },
       leaderboard: [],
       currentQuestion: null,
     });
+  });
+
+  it('carries player color in PlayerView entries', () => {
+    const state = createInitialGame({
+      title: 'T',
+      questions: [
+        { prompt: 'q?', type: 'true-false', timeSeconds: 5, options: ['a', 'b'], correctIndex: 1 },
+      ],
+    });
+    const joined = reduce(state, {
+      type: 'playerJoin',
+      playerId: 'p1',
+      name: 'Ada',
+      color: 'yellow',
+      atMs: 1,
+    }).state;
+    expect(stateView(joined).players).toEqual([
+      { id: 'p1', name: 'Ada', color: 'yellow' },
+    ]
+    );
   });
 
   it('never leaks quiz internals (questions/correct answers) or answer records', () => {
@@ -65,7 +85,7 @@ describe('stateView', () => {
         },
       ],
     });
-    state = reduce(state, { type: 'playerJoin', playerId: 'p1', name: 'Ada', atMs: 1 }).state;
+    state = reduce(state, { type: 'playerJoin', playerId: 'p1', name: 'Ada', color: 'grey', atMs: 1 }).state;
     state = reduce(state, { type: 'startQuiz', atMs: 5_000 }).state;
 
     const view = stateView(state);
@@ -91,7 +111,7 @@ describe('stateView', () => {
         { prompt: 'q?', type: 'true-false', timeSeconds: 5, options: ['True', 'False'], correctIndex: 1 },
       ],
     });
-    state = reduce(state, { type: 'playerJoin', playerId: 'p1', name: 'Ada', atMs: 1 }).state;
+    state = reduce(state, { type: 'playerJoin', playerId: 'p1', name: 'Ada', color: 'pink', atMs: 1 }).state;
     state = reduce(state, { type: 'startQuiz', atMs: 1_000 }).state;
     state = reduce(state, { type: 'reveal' }).state;
 

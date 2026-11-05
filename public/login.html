@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="app.title.login">Offline Kahoot — Log in</title>
+    <link rel="stylesheet" href="/tokens.css" />
+    <link rel="stylesheet" href="/host.css" />
+    <link rel="stylesheet" href="/login.css" />
+  </head>
+  <body class="bg-kahoot">
+    <main class="card" id="login-card">
+      <header class="card-head">
+        <h1 data-i18n="login.title">Log in</h1>
+      </header>
+
+      <form id="login-form" novalidate>
+        <p class="label">
+          <label for="password" data-i18n="login.password">Admin password</label>
+        </p>
+        <input
+          id="password"
+          class="player-input"
+          type="password"
+          required
+          autocomplete="current-password"
+        />
+        <p>
+          <button id="submit" class="player-button" type="submit" data-i18n="login.submit">
+            Log in
+          </button>
+        </p>
+        <ul id="errors" class="errors" role="alert" aria-live="assertive"></ul>
+      </form>
+    </main>
+
+    <!-- i18n.js must load first: this module uses its global API. -->
+    <script src="/i18n.js"></script>
+    <script src="/login.js" type="module"></script>
+  </body>
+</html>

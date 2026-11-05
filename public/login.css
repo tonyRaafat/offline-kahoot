@@ -1,0 +1,35 @@
+/* login.css — login-specific layout only (issue 01).
+ *
+ * Every shared component (.card, .card-head, .label, .player-input,
+ * .player-button, .errors, .lang-toggle, the body treatment) now comes from
+ * the shared design system: tokens.css → host.css, loaded before this sheet.
+ * The login button is the standard rounded .player-button. What remains here
+ * is only what no other page shares: the centered splash heading and the
+ * tilted spring-settle entrance. */
+
+.card-head {
+  text-align: center;
+}
+
+.card-head h1 {
+  margin-bottom: 0;
+}
+
+/* Tilted spring-settle entrance (issue 05): the login card lands a moment
+ * after the toggle and springs from a slight tilt — the login page's one
+ * orchestrated moment. Reduced motion zeroes duration -> instant. */
+@media (prefers-reduced-motion: no-preference) {
+  #login-card {
+    animation: login-settle var(--motion-enter) var(--ease-spring) backwards;
+    animation-delay: calc(2 * var(--motion-fast));
+  }
+  @keyframes login-settle {
+    from {
+      opacity: 0;
+      transform: translateY(18px) rotate(-1.5deg);
+    }
+    to {
+      transform: rotate(0deg);
+    }
+  }
+}

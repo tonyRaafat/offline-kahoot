@@ -50,8 +50,8 @@ function playGameForResults(): { state: GameState; reveals: Reveal[] } {
     }
   };
 
-  apply({ type: 'playerJoin', playerId: 'p1', name: 'Ada', atMs: 1000 });
-  apply({ type: 'playerJoin', playerId: 'p2', name: 'Bob', atMs: 2000 });
+  apply({ type: 'playerJoin', playerId: 'p1', name: 'Ada', color: 'red', atMs: 1000 });
+  apply({ type: 'playerJoin', playerId: 'p2', name: 'Bob', color: 'blue', atMs: 2000 });
   apply({ type: 'startQuiz', atMs: 10_000 });
   // Q0: Ada answers correct at halfway -> round(1000 * 5000 / 10000) = 500.
   apply({ type: 'playerAnswer', playerId: 'p1', answerIndex: 1, atMs: 15_000 });

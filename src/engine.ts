@@ -5,6 +5,8 @@
 // `timerDeadline` stored in state; nothing here reads the wall clock or does
 // any I/O, so scoring and late-answer checks are fully deterministic.
 
+import type { AvatarColor } from './avatar-colors.js';
+
 export type Phase = 'lobby' | 'question' | 'reveal' | 'leaderboard' | 'podium';
 
 export interface Question {
@@ -23,8 +25,11 @@ export interface Quiz {
 export interface Player {
   /** Stable join-issued id; the key used by scores/answers/leaderboard. */
   id: string;
-  /** Final nickname after duplicate auto-suffixing (Tony -> Tony-2 -> Tony-3). */
+  /** Nickname exactly as the client joined it (uniqueness is enforced at the
+   *  socket layer — duplicate names are REJECTED, never auto-suffixed). */
   name: string;
+  /** One of the 10 avatar palette keys (src/avatar-colors.ts). */
+  color: AvatarColor;
   joinedAtMs: number;
 }
 
@@ -55,7 +60,7 @@ export interface GameState {
 
 export type Event =
   | { type: 'startQuiz'; atMs: number }
-  | { type: 'playerJoin'; playerId: string; name: string; atMs: number }
+  | { type: 'playerJoin'; playerId: string; name: string; color: AvatarColor; atMs: number }
   | { type: 'playerAnswer'; playerId: string; answerIndex: number; atMs: number }
   | { type: 'reveal' }
   | { type: 'next'; atMs: number }
@@ -116,7 +121,8 @@ export function reduce(
       }
       const player: Player = {
         id: event.playerId,
-        name: uniqueName(event.name, state.players),
+        name: event.name,
+        color: event.color,
         joinedAtMs: event.atMs,
       };
       const next: GameState = { ...state, players: [...state.players, player] };
@@ -330,13 +336,4 @@ function buildLeaderboard(state: GameState): string[] {
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     })
     .map((p) => p.id);
-}
-
-/** Duplicate nicknames get an auto-suffix: Tony -> Tony-2, then Tony-3, ... */
-function uniqueName(name: string, players: Player[]): string {
-  const taken = new Set(players.map((p) => p.name));
-  if (!taken.has(name)) return name;
-  let n = 2;
-  while (taken.has(`${name}-${n}`)) n++;
-  return `${name}-${n}`;
 }

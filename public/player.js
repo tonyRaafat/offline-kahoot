@@ -2,7 +2,14 @@
 // server pushes through StateView — question (tap to answer), reveal (correct/
 // wrong + points), leaderboard and podium — plus the answerRejected reasons.
 
+import { makeAvatar, AVATAR_COLORS } from '/avatar.js';
+
+// i18n.js (plain script, loaded before this module) provides the globals.
+const { t, set, clear, onChange, applyStatic } = window.I18n;
+
 const ID_KEY = 'offline-kahoot:playerId';
+const COLOR_KEY = 'offline-kahoot:avatarColor';
+const DEFAULT_COLOR = AVATAR_COLORS[0]; // sensible fallback when storage is corrupt/empty
 const NAME_MAX_LEN = 20; // must match src/join.ts NAME_MAX_LEN
 const PIN_DIGITS = /^\d{6}$/;
 
@@ -19,8 +26,11 @@ const status = document.getElementById('status');
 const pinInput = document.getElementById('pin');
 const nameInput = document.getElementById('name');
 const joinButton = document.getElementById('join');
+const colorPicker = document.getElementById('color-picker');
 const finalName = document.getElementById('final-name');
 const waiting = document.getElementById('waiting');
+const lobbyCountEl = document.getElementById('lobby-count');
+const lobbyPlayersEl = document.getElementById('lobby-players');
 
 const questionNumberEl = document.getElementById('question-number');
 const questionPromptEl = document.getElementById('question-prompt');
@@ -49,19 +59,18 @@ socket.on('connect', () => {
 });
 socket.on('connect_error', (err) => {
   console.error('[player] connect_error', err?.message ?? err);
-  status.textContent =
-    'Cannot reach the game server. Are you on the same Wi-Fi as the host?';
+  set(status, 'player.noServer');
 });
 socket.on('connect_timeout', () => {
   console.error('[player] connect_timeout');
-  status.textContent = 'Connection timed out — is the host laptop on and on the same Wi-Fi?';
+  set(status, 'player.timeout');
 });
 socket.on('reconnect_attempt', (attempt) => {
   console.log('[player] reconnect_attempt', attempt);
 });
 socket.on('reconnect_failed', () => {
   console.error('[player] reconnect_failed');
-  status.textContent = 'Lost connection to the game server.';
+  set(status, 'player.lostConnection');
 });
 
 /** PIN + nickname of the current join attempt; re-emitted on every (re)connect. */
@@ -79,6 +88,45 @@ let lastQuestion = null; // CurrentQuestionView of the shown question
 let submitted = false; // one answer per question
 let revealData = null; // last `reveal` payload
 let countdownTimer = null;
+let myColor = null; // avatar color confirmed by the server
+
+// ---- Avatar color picker (join form) ---------------------------------------
+
+function storedColor() {
+  const stored = localStorage.getItem(COLOR_KEY);
+  return AVATAR_COLORS.includes(stored) ? stored : DEFAULT_COLOR;
+}
+
+let selectedColor = storedColor();
+
+for (const color of AVATAR_COLORS) {
+  const swatch = document.createElement('button');
+  swatch.type = 'button';
+  swatch.className = 'color-swatch';
+  swatch.dataset.color = color;
+  swatch.setAttribute('role', 'radio');
+  swatch.setAttribute('aria-checked', 'false');
+  swatch.title = t(`player.color.${color}`); // tooltip on hover/long-press
+  // Attribute hook so a language switch re-translates the tooltip.
+  swatch.dataset.i18nAttr = `title:player.color.${color}`;
+  swatch.addEventListener('click', () => {
+    selectedColor = color;
+    localStorage.setItem(COLOR_KEY, color);
+    updateSwatches();
+  });
+  colorPicker.append(swatch);
+}
+
+function updateSwatches() {
+  for (const swatch of colorPicker.querySelectorAll('.color-swatch')) {
+    const active = swatch.dataset.color === selectedColor;
+    swatch.classList.toggle('selected', active);
+    swatch.setAttribute('aria-checked', active ? 'true' : 'false');
+  }
+}
+
+updateSwatches();
+applyStatic(); // translate the generated swatch titles now and on every toggle
 
 function show(name) {
   entering.hidden = true;
@@ -107,6 +155,24 @@ function startCountdown(timerDeadline) {
 function showLobby() {
   stopCountdown();
   show('lobby');
+  renderLobbyRoster(latestView);
+}
+
+/** Player-side copy of the host lobby roster: avatars + names from StateView.
+ *  Rows carry stable playerId keys (id + data-player-id) for issue 04 FLIP. */
+function renderLobbyRoster(view) {
+  if (!view) return;
+  lobbyCountEl.textContent = view.players.length > 0 ? ` (${view.players.length})` : '';
+  lobbyPlayersEl.replaceChildren(
+    ...view.players.map((player) => {
+      const li = document.createElement('li');
+      li.id = `player-roster-${player.id}`;
+      li.dataset.playerId = player.id;
+      li.classList.toggle('me', player.id === myId);
+      li.replaceChildren(makeAvatar(player.name, player.color), player.name);
+      return li;
+    }),
+  );
 }
 
 function renderQuestion(question, view) {
@@ -117,13 +183,15 @@ function renderQuestion(question, view) {
   show('question');
   questionNumberEl.textContent = String(question.questionIndex + 1);
   questionPromptEl.textContent = question.prompt;
-  answerStatus.textContent = '';
+  clear(answerStatus);
   optionsEl.replaceChildren(
     ...question.options.map((option, answerIndex) => {
       const li = document.createElement('li');
       const button = document.createElement('button');
       button.className = 'answer';
       button.type = 'button';
+      // Answer tile color keyed by option index (tokens.css palette).
+      button.dataset.answerIndex = String(answerIndex);
       button.textContent = option;
       button.addEventListener('click', () => submitAnswer(answerIndex, button));
       li.append(button);
@@ -137,7 +205,7 @@ function submitAnswer(answerIndex, button) {
   if (submitted) return;
   submitted = true;
   for (const other of optionsEl.querySelectorAll('button')) other.disabled = true;
-  answerStatus.textContent = 'Answer locked in!';
+  set(answerStatus, 'player.answerLocked');
   socket.emit('answer', { answerIndex });
 }
 
@@ -147,57 +215,67 @@ function renderResult() {
   show('reveal');
   const mine = revealData.results.find((result) => result.playerId === myId);
   const correct = mine?.correct ?? false;
-  resultTitle.textContent = correct ? 'Correct!' : 'Incorrect';
+  set(resultTitle, correct ? 'player.correct' : 'player.incorrect');
   resultTitle.classList.toggle('correct', correct);
   resultTitle.classList.toggle('wrong', !correct);
-  resultPoints.textContent = `${mine?.points ?? 0} pts`;
-  correctAnswerEl.textContent =
-    lastQuestion?.options[revealData.correctIndex] !== undefined
-      ? `Correct answer: ${lastQuestion.options[revealData.correctIndex]}`
-      : '';
+  set(resultPoints, 'word.points', { points: mine?.points ?? 0 });
+  const answer = lastQuestion?.options[revealData.correctIndex];
+  if (answer !== undefined) set(correctAnswerEl, 'player.correctAnswer', { answer });
+  else clear(correctAnswerEl);
 }
 
 function renderStandings(view, name) {
   stopCountdown();
   show(name);
   const rank = view.leaderboard.indexOf(myId);
-  rankEls[name].textContent =
-    rank >= 0 ? `You're #${rank + 1} of ${view.leaderboard.length}` : 'Waiting for standings…';
-  scoreEls[name].textContent = `${view.scores[myId] ?? 0} pts`;
+  if (rank >= 0) {
+    set(rankEls[name], 'player.rank', { rank: rank + 1, total: view.leaderboard.length });
+  } else {
+    set(rankEls[name], 'player.rankWaiting');
+  }
+  const mine = view.players.find((player) => player.id === myId);
+  const score = document.createElement('span');
+  score.className = 'score-big';
+  score.textContent = t('word.points', { points: view.scores[myId] ?? 0 });
+  scoreEls[name].replaceChildren(
+    makeAvatar(mine?.name ?? '', mine?.color ?? myColor ?? 'grey'),
+    score,
+  );
 }
 
-function rejectText(reason) {
-  switch (reason) {
-    case 'late':
-      return 'Too late — answers for this question are closed';
-    case 'already-answered':
-      return 'Already answered for this question';
-    case 'unknown-player':
-      return 'Cannot submit — connection lost your seat';
-    case 'invalid-answer':
-      return 'That answer was not valid';
-    default:
-      return 'Answer rejected';
-  }
+// Join-error reason keys come straight from the server (src/join.ts);
+// answer-reject reasons straight from the engine. Both map to localized
+// strings here — the raw keys never reach the user.
+const JOIN_ERROR_KEYS = {
+  'bad-pin': 'player.err.bad-pin',
+  'bad-name': 'player.err.bad-name',
+  nameTaken: 'player.err.nameTaken',
+  colorRejected: 'player.err.colorRejected',
+  'game-started': 'player.err.game-started',
+};
+
+/** i18n key for a server joinError reason (localized via set()/t()). */
+function joinErrorKey(reason) {
+  return JOIN_ERROR_KEYS[reason] ?? 'player.err.default';
 }
 
-function errorText(reason) {
-  switch (reason) {
-    case 'bad-pin':
-      return 'Wrong game PIN — check the host screen';
-    case 'bad-name':
-      return 'Nickname must be 1–20 characters';
-    case 'game-started':
-      return 'The game already started — joining closed';
-    default:
-      return 'Could not join — check the PIN and try again';
-  }
+const ANSWER_REJECT_KEYS = {
+  late: 'player.rej.late',
+  'already-answered': 'player.rej.already-answered',
+  'unknown-player': 'player.rej.unknown-player',
+  'invalid-answer': 'player.rej.invalid-answer',
+};
+
+/** i18n key for a server answerRejected reason. */
+function rejectKey(reason) {
+  return ANSWER_REJECT_KEYS[reason] ?? 'player.rej.default';
 }
 
 function currentPayload() {
   return {
     pin: credentials.pin,
     name: credentials.name,
+    color: credentials.color,
     playerId: localStorage.getItem(ID_KEY) ?? undefined,
   };
 }
@@ -212,21 +290,45 @@ socket.on('disconnect', () => {
   // socket.io reconnects on its own; the next `connect` re-sends the join
   // with the stored playerId so the server resumes this player.
   sentThisConnection = false;
-  waiting.textContent = 'Reconnecting…';
+  set(waiting, 'player.reconnecting');
 });
 
-socket.on('joined', ({ playerId, name }) => {
+socket.on('joined', ({ playerId, name, color }) => {
   myId = playerId;
+  myColor = color;
   localStorage.setItem(ID_KEY, playerId);
-  finalName.textContent = name;
-  status.textContent = '';
-  waiting.textContent = 'Waiting for the host to start…';
+  localStorage.setItem(COLOR_KEY, color);
+  finalName.replaceChildren(makeAvatar(name, color), name);
+  clear(status);
+  set(waiting, 'player.waiting');
   showLobby();
 });
 
 socket.on('joinError', ({ reason }) => {
-  status.textContent = errorText(reason);
+  set(status, joinErrorKey(reason));
   pinInput.focus();
+});
+
+// Language switch: static data-i18n strings are re-applied by i18n.js itself
+// (including the swatch title attributes via applyStatic); dynamic phase
+// screens are rebuilt here.
+onChange(() => {
+  if (!myId || !latestView) return;
+  switch (phase) {
+    case 'lobby':
+      renderLobbyRoster(latestView);
+      break;
+    case 'reveal':
+      renderResult();
+      break;
+    case 'leaderboard':
+      renderStandings(latestView, 'leaderboard');
+      break;
+    case 'podium':
+      renderStandings(latestView, 'podium');
+      break;
+    // 'question': its label/number spans are static + tracked already.
+  }
 });
 
 socket.on('state', (view) => {
@@ -234,7 +336,7 @@ socket.on('state', (view) => {
   phase = view.phase;
   if (!myId) {
     // Join confirmation not yet in; keep the waiting copy updated.
-    if (view.phase !== 'lobby') waiting.textContent = 'Game in progress…';
+    if (view.phase !== 'lobby') set(waiting, 'player.inProgress');
     return;
   }
   switch (view.phase) {
@@ -266,22 +368,22 @@ socket.on('reveal', (payload) => {
 });
 
 socket.on('answerRejected', ({ reason }) => {
-  answerStatus.textContent = rejectText(reason);
+  set(answerStatus, rejectKey(reason));
 });
 
 joinButton.addEventListener('click', () => {
   const pin = pinInput.value.trim();
   const name = nameInput.value.trim();
   if (!PIN_DIGITS.test(pin)) {
-    status.textContent = 'Enter the 6-digit game PIN';
+    set(status, 'player.enterPin');
     return;
   }
   if (name.length === 0 || name.length > NAME_MAX_LEN) {
-    status.textContent = 'Nickname must be 1–20 characters';
+    set(status, 'player.nameLength');
     return;
   }
-  credentials = { pin, name };
-  status.textContent = 'Joining…';
+  credentials = { pin, name, color: selectedColor };
+  set(status, 'player.joining');
   if (socket.connected) {
     sentThisConnection = true;
     socket.emit('join', currentPayload());
