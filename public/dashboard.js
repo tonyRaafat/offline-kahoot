@@ -7,6 +7,21 @@
 // i18n.js (plain script, loaded before this module) provides the globals.
 const { t, set, clear, onChange } = window.I18n;
 
+// Inline SVG icons for the card's secondary actions (edit / delete) — they
+// render as compact icon buttons, so no visible text rides on them; meaning
+// is carried entirely by aria-label/title (localized at render time).
+const editIcon =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+  ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>' +
+  '<path d="m15 5 4 4"/></svg>';
+const deleteIcon =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+  ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>' +
+  '<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
+  '<line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
+
 const quizCardsEl = document.getElementById('quiz-cards');
 const quizzesEmptyEl = document.getElementById('quizzes-empty');
 const statusEl = document.getElementById('dashboard-status');
@@ -14,8 +29,9 @@ const liveBannerEl = document.getElementById('live-banner');
 const liveBannerTextEl = document.getElementById('live-banner-text');
 const newTitleEl = document.getElementById('new-title');
 const createButton = document.getElementById('create');
-const importButton = document.getElementById('import');
-const importFileEl = document.getElementById('import-file');
+// Import/export UI temporarily hidden (dashboard.js + dashboard.html).
+// const importButton = document.getElementById('import');
+// const importFileEl = document.getElementById('import-file');
 const logoutButton = document.getElementById('logout');
 
 let quizzes = [];
@@ -65,6 +81,8 @@ function renderQuizCard(quiz) {
   count.className = 'quiz-card-count';
   set(count, 'dashboard.questionCount', { count: quiz.questionCount });
 
+  // One action row: Start keeps its text label (primary action); Edit and
+  // Delete are icon buttons — quieter UI, same behaviors as before.
   const actions = document.createElement('div');
   actions.className = 'quiz-card-actions';
 
@@ -75,31 +93,26 @@ function renderQuizCard(quiz) {
   set(start, 'dashboard.start');
   start.addEventListener('click', () => startQuiz(quiz, start));
 
+  // Edit: icon link into the editor; the localized label rides along as
+  // tooltip + accessible name (no visible text).
   const edit = document.createElement('a');
-  edit.className = 'player-button secondary';
+  edit.className = 'icon-btn';
   edit.href = `/editor?id=${encodeURIComponent(quiz.id)}`;
-  set(edit, 'dashboard.edit');
+  edit.title = t('dashboard.edit');
+  edit.setAttribute('aria-label', t('dashboard.edit'));
+  edit.innerHTML = editIcon;
 
-  actions.append(start, edit);
-
-  // Overflow actions: export (direct download link) + delete (confirm first).
-  const overflow = document.createElement('div');
-  overflow.className = 'quiz-card-overflow';
-
-  const exportLink = document.createElement('a');
-  exportLink.className = 'label-inline';
-  exportLink.download = `${quiz.id}.json`;
-  exportLink.href = `/api/quizzes/${encodeURIComponent(quiz.id)}/export`;
-  set(exportLink, 'host.exportQuiz', { title: quiz.title });
-
+  // Delete: icon button with confirm (same flow as before).
   const removeButton = document.createElement('button');
-  removeButton.className = 'player-button danger';
+  removeButton.className = 'icon-btn danger';
   removeButton.type = 'button';
-  set(removeButton, 'dashboard.delete');
+  removeButton.title = t('dashboard.delete');
+  removeButton.setAttribute('aria-label', t('dashboard.delete'));
+  removeButton.innerHTML = deleteIcon;
   removeButton.addEventListener('click', () => deleteQuiz(quiz));
 
-  overflow.append(exportLink, removeButton);
-  card.append(title, count, actions, overflow);
+  actions.append(start, edit, removeButton);
+  card.append(title, count, actions);
   return card;
 }
 
@@ -160,6 +173,9 @@ createButton.addEventListener('click', async () => {
   }
 });
 
+// Import/export UI temporarily hidden: handler block below kept as reference
+// for restoring the feature (elements + i18n keys still exist).
+/*
 // Import (spec 4.1: moved here with export from the old host lobby). The
 // endpoint body IS one quiz JSON (POST /api/quizzes/import), i.e. exactly
 // what the card Export link downloads, so export files re-import as-is;
@@ -205,6 +221,7 @@ importFileEl.addEventListener('change', async () => {
     importButton.disabled = false;
   }
 });
+*/
 
 // ---- Live-game indicator -------------------------------------------------------
 

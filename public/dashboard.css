@@ -218,8 +218,15 @@ html[dir='rtl'] .live-banner::after {
 
 .quiz-card-actions {
   margin-top: auto;
-  display: grid;
-  gap: var(--space-control); /* comfortable control gap, was 0.5rem */
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* Start grows to fill the row; the icon buttons hold their square beside it */
+.quiz-card-actions .player-button {
+  flex: 1;
+  justify-content: center;
 }
 
 /* Card buttons are compact, unlike the full-width phase-screen buttons —
@@ -230,32 +237,55 @@ html[dir='rtl'] .live-banner::after {
   font-size: var(--fs-base);
 }
 
-.quiz-card-overflow {
-  display: flex;
-  flex-wrap: nowrap;
+/* Icon buttons (Edit / Delete on quiz cards): square, compact, ghost-style
+ * so they read as tertiary controls; the icon inherits currentColor so a
+ * single hover rule recolors the glyph. Buttons are self-contained (inline
+ * SVG from dashboard.js), so they need no images or icon-font assets. */
+.icon-btn {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2) var(--sp-4);
-  margin-top: var(--sp-2);
+  justify-content: center;
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
 }
 
-/* The Export link carries the quiz title in its text; it truncates instead
- * of wrapping so Export + Delete always share one row and every card keeps
- * the same height (issue 01 review fix). */
-.quiz-card-overflow .label-inline {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.icon-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
-.quiz-card-overflow .player-button.danger {
-  /* compact danger chip */
-  width: auto;
-  min-height: var(--control-h-sm);
-  padding: var(--sp-1) var(--sp-3);
-  font-size: var(--fs-sm);
-  border-radius: var(--r-pill);
+.icon-btn:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--neon-soft);
+  transform: translateY(-1px);
+}
+
+.icon-btn.danger:hover {
+  border-color: var(--rose);
+  color: var(--rose);
+  background: transparent;
+}
+
+.icon-btn:active {
+  transform: translateY(0);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--neon);
+  outline-offset: 2px;
 }
 
 /* Small screens: single column; the create row stacks. */

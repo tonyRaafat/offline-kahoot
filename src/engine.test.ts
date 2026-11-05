@@ -522,6 +522,46 @@ describe('next, leaderboard, podium', () => {
   });
 });
 
+describe('playerLeave', () => {
+  it('in the lobby removes the player, cleans scores/answers/firstCorrectAtMs/leaderboard, and broadcasts', () => {
+    let state = lobbyWith(QUIZ, [
+      ['p1', 'Alice'],
+      ['p2', 'Bob'],
+    ]);
+    // Leave happens only in the lobby, but the map/leaderboard cleanup is
+    // still exercised: no-op in the lobby or not, the reducer must not leak
+    // stale keys. Seed the maps as if a previous game left data behind.
+    state = {
+      ...state,
+      scores: { p1: 5, p2: 7 },
+      firstCorrectAtMs: { p1: 123, p2: 456 },
+      answers: { p2: { answerIndex: 0, atMs: 1, correct: false, points: 0 } },
+      leaderboard: ['p1', 'p2'],
+    };
+    const { state: after, effects } = reduce(state, { type: 'playerLeave', playerId: 'p1' });
+    expect(after.players.map((p) => p.id)).toEqual(['p2']);
+    expect(after.scores).toEqual({ p2: 7 });
+    expect(after.firstCorrectAtMs).toEqual({ p2: 456 });
+    expect(after.leaderboard).toEqual(['p2']);
+    expect(effects).toEqual([{ type: 'broadcastState', state: after }]);
+  });
+
+  it('is a no-op for an unknown playerId', () => {
+    const state = lobbyWith(QUIZ, [['p1', 'Alice']]);
+    const { state: after, effects } = reduce(state, { type: 'playerLeave', playerId: 'ghost' });
+    expect(after).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  it('is ignored when the phase is not lobby (no mid-game roster changes)', () => {
+    const started = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    const { state: after, effects } = reduce(started, { type: 'playerLeave', playerId: 'p1' });
+    expect(after).toEqual(started);
+    expect(after.players.map((p) => p.id)).toEqual(['p1']);
+    expect(effects).toEqual([]);
+  });
+});
+
 describe('end', () => {
   it('returns to a clean lobby but keeps the joined players', () => {
     let state = start(

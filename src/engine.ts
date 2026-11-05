@@ -61,6 +61,7 @@ export interface GameState {
 export type Event =
   | { type: 'startQuiz'; atMs: number }
   | { type: 'playerJoin'; playerId: string; name: string; color: AvatarColor; atMs: number }
+  | { type: 'playerLeave'; playerId: string }
   | { type: 'playerAnswer'; playerId: string; answerIndex: number; atMs: number }
   | { type: 'reveal' }
   | { type: 'next'; atMs: number }
@@ -126,6 +127,28 @@ export function reduce(
         joinedAtMs: event.atMs,
       };
       const next: GameState = { ...state, players: [...state.players, player] };
+      return { state: next, effects: [{ type: 'broadcastState', state: next }] };
+    }
+
+    case 'playerLeave': {
+      if (state.phase !== 'lobby') return { state, effects: [] };
+      if (!state.players.some((p) => p.id === event.playerId)) {
+        return { state, effects: [] };
+      }
+      const scores: Record<string, number> = { ...state.scores };
+      delete scores[event.playerId];
+      const firstCorrectAtMs: Record<string, number> = { ...state.firstCorrectAtMs };
+      delete firstCorrectAtMs[event.playerId];
+      const answers: Record<string, AnswerRecord> = { ...state.answers };
+      delete answers[event.playerId];
+      const next: GameState = {
+        ...state,
+        players: state.players.filter((p) => p.id !== event.playerId),
+        scores,
+        firstCorrectAtMs,
+        answers,
+        leaderboard: state.leaderboard.filter((id) => id !== event.playerId),
+      };
       return { state: next, effects: [{ type: 'broadcastState', state: next }] };
     }
 

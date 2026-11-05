@@ -16,6 +16,9 @@
 //     `host` (no payload)        marks this socket as THE host (once per page)
 //     `hostStart` (no payload)   host only: lobby -> question 1
 //     `answer` { answerIndex }   the joined player's answer for the live question
+//     `leave` (no payload)       the joined player leaves voluntarily: removes
+//                                them from the roster (lobby phase only; a
+//                                no-op mid-game so scores stay consistent)
 //     `reveal` (no payload)      host only: question -> reveal
 //     `next` (no payload)        host only: reveal -> leaderboard -> next question / podium
 //     `endGame` (no payload)     host only: any live phase -> lobby (players kept,
@@ -30,6 +33,10 @@
 //                                    enforced here, auto-suffixing is gone), or a
 //                                    join after the quiz started (`game-started`)
 //     `answerRejected` { reason }   routed to the submitting player only
+//     `resumeAnswerStatus` { questionIndex, alreadyAnswered }
+//                              only sent on a resume while a question is live:
+//                              whether that player already answered it, so the
+//                              client can restore the locked state
 //   server -> all:
 //     `state` StateView on every broadcastState Effect (PlayerView carries
 //              id/name/color; never correctIndex)
@@ -107,6 +114,14 @@ export function wireSockets(io: Server, wiring: SocketWiring): void {
     });
     socket.on('hostStart', () => handleHostStart(io, wiring, socket, onReveal));
     socket.on('answer', (raw: unknown) => handleAnswer(io, wiring, socket, raw, onReveal));
+    socket.on('leave', () => {
+      const playerId = socket.data.playerId;
+      if (typeof playerId !== 'string') return;
+      if (wiring.gameSession.current.phase === 'lobby') {
+        socket.data.playerId = undefined;
+        broadcastEffects(io, socket, wiring, wiring.gameSession.dispatch({ type: 'playerLeave', playerId }), onReveal);
+      }
+    });
     socket.on('reveal', () => handleHostEvent(io, wiring, socket, 'reveal', onReveal));
     socket.on('next', () => handleHostEvent(io, wiring, socket, 'next', onReveal));
     socket.on('endGame', () => handleEndGame(io, wiring, socket, onReveal));
@@ -259,6 +274,12 @@ function handleJoin(
     // name + color (duplicate-name checks do not apply to a resume).
     socket.data.playerId = playerId;
     socket.emit('joined', { playerId, name: existing.name, color: existing.color });
+    if (wiring.gameSession.current.phase === 'question') {
+      socket.emit('resumeAnswerStatus', {
+        questionIndex: wiring.gameSession.current.questionIndex,
+        alreadyAnswered: playerId in wiring.gameSession.current.answers,
+      });
+    }
     socket.emit('state', stateView(wiring.gameSession.current));
     if (wiring.gameSession.current.phase === 'reveal' && lastReveal) {
       socket.emit('reveal', lastReveal);

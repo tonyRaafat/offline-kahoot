@@ -257,6 +257,52 @@ interface JoinErrorPayload {
   reason: string;
 }
 
+describe('player leave socket contract', () => {
+  it('removes the leaver from the roster and broadcasts the new state', async () => {
+    const boot = await bootQuizServer();
+    try {
+      const p1 = openAt(boot.baseUrl);
+      const p2 = openAt(boot.baseUrl);
+      // Drain each join's broadcast before leaving rooms for the leave event.
+      await joinPlayer(p1, 'Leaver');
+      const stayDrain = nextBatch<StateViewPayload>(p2, 'state', 1);
+      const { playerId:StayId } = await joinPlayer(p2, 'Stayer');
+      await stayDrain;
+
+      // The remaining player must receive exactly one state after the leave:
+      // the post-leave broadcast state.
+      const postLeave = nextBatch<StateViewPayload>(p2, 'state', 1);
+      p1.emit('leave');
+      const [after] = await postLeave;
+      expect(after.phase).toBe('lobby');
+      expect(after.players).toEqual([
+        { id: StayId, name: 'Stayer', color: 'orange' },
+      ]);
+      expect(after.scores).toEqual({});
+    } finally {
+      await teardownBoot(boot);
+    }
+  });
+
+  it('ignores leave from a socket that never joined (no broadcast at all)', async () => {
+    const boot = await bootQuizServer();
+    try {
+      const p1 = openAt(boot.baseUrl);
+      await joinPlayer(p1, 'Present');
+      const ghost = openAt(boot.baseUrl);
+      ghost.emit('leave');
+
+      // No playerLeave dispatch -> no broadcastState to anyone.
+      let sawState = 0;
+      p1.on('state', () => sawState++);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(sawState).toBe(0);
+    } finally {
+      await teardownBoot(boot);
+    }
+  });
+});
+
 /**
  * Boots an isolated http + socket.io server wired through wireSockets() with
  * its own GameSession, so question-cycle tests never disturb the join tests'
@@ -524,6 +570,43 @@ describe('question cycle socket contract', () => {
       await expect(rejected).resolves.toEqual({ reason: 'late' });
     } finally {
       vi.useRealTimers();
+      await teardownBoot(boot);
+    }
+  });
+
+  it('tells a rejoining player mid-question whether they already answered (resumeAnswerStatus)', async () => {
+    const boot = await bootQuizServer();
+    try {
+      const host = openAt(boot.baseUrl, { auth: true });
+      host.emit('host');
+      const player = openAt(boot.baseUrl);
+      const joinDrain = nextBatch<StateViewPayload>(host, 'state', 1);
+      const { playerId, name } = await joinPlayer(player, 'Returnee');
+      await joinDrain;
+
+      const startBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('hostStart');
+      await startBatch;
+
+      // Answer question 0, then drop the connection (page refresh).
+      const answeredBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      player.emit('answer', { answerIndex: sampleQuiz.questions[0]!.correctIndex });
+      await answeredBatch;
+      player.disconnect();
+      await delay(50);
+
+      // Reconnect with the SAME identity: joined, then resumeAnswerStatus
+      // (question is still live), then state.
+      const resumed = openAt(boot.baseUrl);
+      const resumedJoined = nextEvent<JoinedPayload>(resumed, 'joined');
+      const resumeStatus = nextEvent<{ questionIndex: number; alreadyAnswered: boolean }>(
+        resumed,
+        'resumeAnswerStatus',
+      );
+      resumed.emit('join', { pin: SESSION_PIN, name, color: 'orange', playerId });
+      await resumedJoined;
+      await expect(resumeStatus).resolves.toEqual({ questionIndex: 0, alreadyAnswered: true });
+    } finally {
       await teardownBoot(boot);
     }
   });

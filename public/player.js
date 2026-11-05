@@ -9,6 +9,8 @@ const { t, set, clear, onChange, applyStatic } = window.I18n;
 
 const ID_KEY = 'offline-kahoot:playerId';
 const COLOR_KEY = 'offline-kahoot:avatarColor';
+const NAME_KEY = 'offline-kahoot:name';
+const PIN_KEY = 'offline-kahoot:pin';
 const DEFAULT_COLOR = AVATAR_COLORS[0]; // sensible fallback when storage is corrupt/empty
 const NAME_MAX_LEN = 20; // must match src/join.ts NAME_MAX_LEN
 const PIN_DIGITS = /^\d{6}$/;
@@ -79,6 +81,13 @@ let credentials = null;
 // reset on disconnect so every fresh connection sends exactly one join.
 let sentThisConnection = false;
 
+// True while a silent auto-rejoin from the stored identity is in flight (page
+// refresh): a joinError then means the stored identity is dead and must clear.
+let resuming = false;
+// Question index the server says we already answered (on resume); renderQuestion
+// restores the answer-locked UI for it.
+let lockedQuestionIndex = null;
+
 // Gameplay state.
 let myId = null; // assigned playerId from `joined`
 let phase = 'lobby'; // latest StateView phase
@@ -91,6 +100,33 @@ let countdownTimer = null;
 let myColor = null; // avatar color confirmed by the server
 
 // ---- Avatar color picker (join form) ---------------------------------------
+
+function storedIdentity() {
+  const playerId = localStorage.getItem(ID_KEY);
+  const name = localStorage.getItem(NAME_KEY);
+  const pin = localStorage.getItem(PIN_KEY);
+  if (!playerId || !name || !pin) return null;
+  return { playerId, name, pin };
+}
+
+function clearIdentity() {
+  localStorage.removeItem(ID_KEY);
+  localStorage.removeItem(COLOR_KEY);
+  localStorage.removeItem(NAME_KEY);
+  localStorage.removeItem(PIN_KEY);
+  selectedColor = DEFAULT_COLOR;
+  updateSwatches();
+  myId = null;
+  credentials = null;
+  resuming = false;
+  lockedQuestionIndex = null;
+  finalName.replaceChildren();
+}
+
+function showEntering() {
+  entering.hidden = false;
+  for (const card of Object.values(cards)) card.hidden = true;
+}
 
 function storedColor() {
   const stored = localStorage.getItem(COLOR_KEY);
@@ -127,6 +163,16 @@ function updateSwatches() {
 
 updateSwatches();
 applyStatic(); // translate the generated swatch titles now and on every toggle
+
+// Silent auto-resume: if this device previously joined, re-send the stored
+// identity on connect so an accidental page refresh continues the game.
+const stored = storedIdentity();
+if (stored) {
+  credentials = { pin: stored.pin, name: stored.name, color: storedColor() };
+  resuming = true;
+  show('lobby');
+  set(waiting, 'player.reconnecting');
+}
 
 function show(name) {
   entering.hidden = true;
@@ -178,7 +224,7 @@ function renderLobbyRoster(view) {
 function renderQuestion(question, view) {
   lastQuestion = question;
   shownQuestionIndex = question.questionIndex;
-  submitted = false;
+  submitted = question.questionIndex === lockedQuestionIndex;
   stopCountdown();
   show('question');
   questionNumberEl.textContent = String(question.questionIndex + 1);
@@ -198,6 +244,11 @@ function renderQuestion(question, view) {
       return li;
     }),
   );
+  if (submitted) {
+    // Refreshed mid-question after answering: restore the locked state.
+    for (const button of optionsEl.querySelectorAll('button')) button.disabled = true;
+    set(answerStatus, 'player.answerLocked');
+  }
   startCountdown(question.timerDeadline);
 }
 
@@ -296,15 +347,36 @@ socket.on('disconnect', () => {
 socket.on('joined', ({ playerId, name, color }) => {
   myId = playerId;
   myColor = color;
+  resuming = false;
   localStorage.setItem(ID_KEY, playerId);
   localStorage.setItem(COLOR_KEY, color);
+  localStorage.setItem(NAME_KEY, name);
+  if (credentials) localStorage.setItem(PIN_KEY, credentials.pin);
   finalName.replaceChildren(makeAvatar(name, color), name);
   clear(status);
   set(waiting, 'player.waiting');
   showLobby();
 });
 
+// Mid-question resume status: the server tells us whether we already answered
+// the live question so renderQuestion can restore the locked state.
+socket.on('resumeAnswerStatus', ({ questionIndex, alreadyAnswered }) => {
+  lockedQuestionIndex = alreadyAnswered ? questionIndex : null;
+});
+
 socket.on('joinError', ({ reason }) => {
+  if (resuming) {
+    // The silent auto-rejoin was rejected (stale PIN / roster change / etc.):
+    // tear down the stored identity and show the blank join form again.
+    const key = joinErrorKey(reason);
+    clearIdentity();
+    pinInput.value = '';
+    nameInput.value = '';
+    showEntering();
+    set(status, key);
+    pinInput.focus();
+    return;
+  }
   set(status, joinErrorKey(reason));
   pinInput.focus();
 });
@@ -390,4 +462,17 @@ joinButton.addEventListener('click', () => {
   }
   // Disconnected: socket.io buffers nothing here by contract — the next
   // `connect` fires the emit via the handler above.
+});
+
+const leaveButton = document.getElementById('leave');
+leaveButton.addEventListener('click', () => {
+  // Voluntary leave: drop the seat on the server (lobby phase only — the
+  // server ignores `leave` once the quiz has started) and forget this device.
+  socket.emit('leave');
+  clearIdentity();
+  pinInput.value = '';
+  nameInput.value = '';
+  clear(status);
+  showEntering();
+  pinInput.focus();
 });
