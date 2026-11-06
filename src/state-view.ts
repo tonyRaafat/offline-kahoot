@@ -20,6 +20,11 @@ export interface CurrentQuestionView {
   options: string[];
   timeSeconds: number;
   timerDeadline: number;
+  /** Answered-progress for the host "Answered X/Y" indicator: how many
+   *  accepted answers the live question has and how many players are on the
+   *  roster. Counts only — no answer records, no correctIndex leak. */
+  answeredCount: number;
+  playerCount: number;
 }
 
 export interface StateView {
@@ -45,6 +50,8 @@ export function stateView(state: GameState): StateView {
             options: [...q.options],
             timeSeconds: q.timeSeconds,
             timerDeadline: state.timerDeadline,
+            answeredCount: Object.keys(state.answers).length,
+            playerCount: state.players.length,
           };
         })()
       : null;

@@ -19,7 +19,11 @@
 //     `leave` (no payload)       the joined player leaves voluntarily: removes
 //                                them from the roster (lobby phase only; a
 //                                no-op mid-game so scores stay consistent)
-//     `reveal` (no payload)      host only: question -> reveal
+//     `reveal` (no payload)      host only: question -> reveal (fallback for
+//                                AFK players; the engine AUTO-REVEALS as soon
+//                                as every joined player in the roster has
+//                                answered the live question, using the exact
+//                                same reveal construction)
 //     `next` (no payload)        host only: reveal -> leaderboard -> next question / podium
 //     `endGame` (no payload)     host only: any live phase -> lobby (players kept,
 //                                scores cleared); results of the live game are saved

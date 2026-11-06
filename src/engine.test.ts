@@ -166,7 +166,8 @@ describe('startQuiz', () => {
 describe('playerAnswer', () => {
   it('scores a correct answer round(1000 x remainingMs / totalMs)', () => {
     // Answered 2000ms into a 10000ms question: round(1000 * 8000 / 10000) = 800.
-    const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    // p2 never answers so the question stays open (no auto-reveal yet).
+    const state = start(lobbyWith(QUIZ, [['p1', 'Alice'], ['p2', 'Bob']]));
     const { state: after, effects } = reduce(state, {
       type: 'playerAnswer',
       playerId: 'p1',
@@ -221,7 +222,8 @@ describe('playerAnswer', () => {
   });
 
   it('accepts an answer submitted exactly at the deadline with 0 points', () => {
-    const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    // p2 keeps the question open (no auto-reveal on p1's answer).
+    const state = start(lobbyWith(QUIZ, [['p1', 'Alice'], ['p2', 'Bob']]));
     const { state: after } = reduce(state, {
       type: 'playerAnswer',
       playerId: 'p1',
@@ -236,23 +238,29 @@ describe('playerAnswer', () => {
     });
   });
 
-  it('rejects answers submitted after the deadline', () => {
-    const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+  it('accepts a late answer with 0 points (hidden scoring window)', () => {
+    // Past the deadline the remaining time is clamped to 0, so a correct
+    // answer still locks in but scores nothing. p2 keeps the question open.
+    const state = start(lobbyWith(QUIZ, [['p1', 'Alice'], ['p2', 'Bob']]));
     const { state: after, effects } = reduce(state, {
       type: 'playerAnswer',
       playerId: 'p1',
       answerIndex: 1,
       atMs: Q1_DEADLINE + 1,
     });
-    expect(after.answers).toEqual({});
-    expect(after.scores).toEqual({});
-    expect(effects).toEqual([
-      { type: 'answerRejected', playerId: 'p1', reason: 'late' },
-    ]);
+    expect(after.answers['p1']).toEqual({
+      answerIndex: 1,
+      atMs: Q1_DEADLINE + 1,
+      correct: true,
+      points: 0,
+    });
+    expect(after.scores).toEqual({ p1: 0 });
+    expect(effects).toEqual([{ type: 'broadcastState', state: after }]);
   });
 
   it('rejects a second answer from the same player within one question', () => {
-    const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    // p2 keeps the question open after p1's first answer (no auto-reveal).
+    const state = start(lobbyWith(QUIZ, [['p1', 'Alice'], ['p2', 'Bob']]));
     const afterFirst = reduce(state, {
       type: 'playerAnswer',
       playerId: 'p1',
@@ -361,6 +369,113 @@ describe('reveal', () => {
     const { state: after, effects } = reduce(state, { type: 'reveal' });
     expect(after).toEqual(state);
     expect(effects).toEqual([]);
+  });
+});
+
+describe('auto-reveal (every joined player answered)', () => {
+  it('fires as soon as the last roster player answers, identical to a manual reveal', () => {
+    let state = start(
+      lobbyWith(QUIZ, [
+        ['p1', 'Alice'],
+        ['p2', 'Bob'],
+      ]),
+    );
+    state = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p1',
+      answerIndex: 1,
+      atMs: 1_002_000,
+    }).state;
+    // p1 alone: the question is still live.
+    expect(state.phase).toBe('question');
+    expect(state.scores).toEqual({ p1: 800 });
+
+    // p2's answer completes the roster: question -> reveal, with scoring
+    // already applied per answer. Same construction as the manual reveal.
+    const { state: after, effects } = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p2',
+      answerIndex: 0, // wrong
+      atMs: 1_003_000,
+    });
+    expect(after.phase).toBe('reveal');
+    expect(after.answers).toEqual({
+      p1: { answerIndex: 1, atMs: 1_002_000, correct: true, points: 800 },
+      p2: { answerIndex: 0, atMs: 1_003_000, correct: false, points: 0 },
+    });
+    expect(effects).toEqual([
+      {
+        type: 'broadcastReveal',
+        reveal: {
+          questionIndex: 0,
+          correctIndex: 1,
+          results: [
+            { playerId: 'p1', answerIndex: 1, correct: true, points: 800 },
+            { playerId: 'p2', answerIndex: 0, correct: false, points: 0 },
+          ],
+        },
+      },
+      { type: 'broadcastState', state: after },
+    ]);
+  });
+
+  it('does not fire while any roster player has not answered', () => {
+    let state = start(
+      lobbyWith(QUIZ, [
+        ['p1', 'Alice'],
+        ['p2', 'Bob'],
+      ]),
+    );
+    const { state: after } = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p1',
+      answerIndex: 1,
+      atMs: 1_002_000,
+    });
+    expect(after.phase).toBe('question');
+    expect(after.scores).toEqual({ p1: 800 });
+  });
+
+  it("is the manual reveal's fallback: a reveal after the auto-reveal is a no-op", () => {
+    let state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    const { state: revealed } = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p1',
+      answerIndex: 1,
+      atMs: 1_002_000,
+    });
+    expect(revealed.phase).toBe('reveal'); // 1-player roster answered -> auto
+    const { state: after, effects } = reduce(revealed, { type: 'reveal' });
+    expect(after).toEqual(revealed);
+    expect(effects).toEqual([]);
+  });
+
+  it('a late answer still counts as answered and can trigger the auto-reveal', () => {
+    let state = start(
+      lobbyWith(QUIZ, [
+        ['p1', 'Alice'],
+        ['p2', 'Bob'],
+      ]),
+    );
+    state = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p1',
+      answerIndex: 1,
+      atMs: 1_002_000,
+    }).state;
+    const { state: after } = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p2',
+      answerIndex: 1,
+      atMs: Q1_DEADLINE + 5_000, // well after the deadline
+    });
+    expect(after.phase).toBe('reveal');
+    expect(after.answers['p2']).toEqual({
+      answerIndex: 1,
+      atMs: Q1_DEADLINE + 5_000,
+      correct: true,
+      points: 0,
+    });
   });
 });
 

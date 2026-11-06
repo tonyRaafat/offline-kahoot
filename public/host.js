@@ -53,6 +53,9 @@ const countdownEl = document.getElementById('countdown');
 const timerBarEl = document.getElementById('timer-bar');
 const answeredBarEl = document.getElementById('answered-bar');
 const answeredCountEl = document.getElementById('answered-count');
+// Host-big: small "Answered X / Y" pill in the question top bar (the view
+// carries counts only — never the answers themselves).
+const answeredIndicatorEl = document.getElementById('answered-indicator');
 const revealButton = document.getElementById('reveal');
 const nextButton = document.getElementById('next');
 const leaderboardNextButton = document.getElementById('leaderboard-next');
@@ -108,6 +111,9 @@ function startCountdown(timerDeadline, timeSeconds = 0) {
   stopCountdown();
   const totalMs = timeSeconds > 0 ? timeSeconds * 1000 : 0;
   const tick = () => {
+    // Host-big: the digits clamp at 0 and the pill keeps showing it (plus the
+    // drained bar) after the window — the scoring window is hidden, the
+    // fallback is the host's manual Reveal button below.
     const remainingMs = Math.max(0, timerDeadline - Date.now());
     countdownEl.textContent = String(Math.ceil(remainingMs / 1000));
     // Timer progress bar drains with the question window (scaleX only).
@@ -117,6 +123,14 @@ function startCountdown(timerDeadline, timeSeconds = 0) {
   };
   tick();
   countdownTimer = setInterval(tick, 250);
+}
+
+/** Fills the top-bar "Answered X / Y" pill from the sanitized view (counts
+ *  only); every mid-question state push refreshes it. */
+function renderAnsweredIndicator(question) {
+  if (answeredIndicatorEl === null || !question) return;
+  answeredIndicatorEl.textContent =
+    `${t('host.answered')} ${question.answeredCount} / ${question.playerCount}`;
 }
 
 /** Player-id -> PlayerView lookup from the roster within the current StateView. */
@@ -204,6 +218,7 @@ function renderQuestion(view) {
   show('question');
   quizTitleEl.textContent = view.quizTitle;
   questionNumberEl.textContent = String(question.questionIndex + 1);
+  renderAnsweredIndicator(question);
   questionPromptEl.textContent = question.prompt;
   questionOptionsEl.replaceChildren(
     ...question.options.map((option, answerIndex) => {

@@ -86,6 +86,7 @@ describe('stateView', () => {
       ],
     });
     state = reduce(state, { type: 'playerJoin', playerId: 'p1', name: 'Ada', color: 'grey', atMs: 1 }).state;
+    state = reduce(state, { type: 'playerJoin', playerId: 'p2', name: 'Bob', color: 'pink', atMs: 2 }).state;
     state = reduce(state, { type: 'startQuiz', atMs: 5_000 }).state;
 
     const view = stateView(state);
@@ -95,8 +96,18 @@ describe('stateView', () => {
       options: ['3', '4', '5'],
       timeSeconds: 30,
       timerDeadline: 35_000,
+      // Answered-progress counts for the host indicator (no records leaked).
+      answeredCount: 0,
+      playerCount: 2,
     });
     expect(view.leaderboard).toEqual([]);
+
+    // An accepted answer bumps answeredCount (p2 never answers, so no
+    // auto-reveal yet) without ever exposing the answer record itself.
+    state = reduce(state, { type: 'playerAnswer', playerId: 'p1', answerIndex: 0, atMs: 6_000 }).state;
+    const after = stateView(state);
+    expect(after.currentQuestion).toMatchObject({ answeredCount: 1, playerCount: 2 });
+    expect(JSON.stringify(after)).not.toContain('"answers"');
 
     // The sanitized view must not carry the correct answer anywhere.
     expect(JSON.stringify(view)).not.toContain('correctIndex');

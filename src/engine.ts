@@ -3,7 +3,14 @@
 // `reduce(state, event) -> { state, effects }` is the only entry point.
 // All time enters the reducer explicitly via `atMs` fields on events and the
 // `timerDeadline` stored in state; nothing here reads the wall clock or does
-// any I/O, so scoring and late-answer checks are fully deterministic.
+// any I/O, so scoring is fully deterministic.
+//
+// Hidden scoring window: the timer deadline stays the scoring boundary
+// (points fall to 0 past it), but answers that arrive after it are ACCEPTED
+// with 0 points so the question only closes via the reveal. The reveal is
+// then auto-triggered as soon as every joined player in the roster has
+// answered (see finishQuestion/maybeAutoReveal); the host's manual `reveal`
+// stays as the fallback for players who never answer.
 
 import type { AvatarColor } from './avatar-colors.js';
 
@@ -70,6 +77,9 @@ export type Event =
 export type AnswerRejectReason =
   | 'unknown-player'
   | 'already-answered'
+  // 'late' is kept on the wire contract for back-compat (older clients may
+  // still map it) but the engine no longer emits it: past-deadline answers
+  // are accepted with 0 points so everyone can lock in during the window.
   | 'late'
   | 'invalid-answer';
 
@@ -200,18 +210,6 @@ export function reduce(
         };
       }
       const question = state.quiz.questions[state.questionIndex];
-      if (state.timerDeadline === null || event.atMs > state.timerDeadline) {
-        return {
-          state,
-          effects: [
-            {
-              type: 'answerRejected',
-              playerId: event.playerId,
-              reason: 'late',
-            },
-          ],
-        };
-      }
       if (
         !Number.isInteger(event.answerIndex) ||
         event.answerIndex < 0 ||
@@ -228,10 +226,13 @@ export function reduce(
           ],
         };
       }
+      // Hidden scoring window: past the deadline the remaining time goes
+      // negative, so the clamped time-weighted score lands at exactly 0 —
+      // the answer still counts as answered (and can trigger the reveal).
       const totalMs = question.timeSeconds * 1000;
-      const remainingMs = state.timerDeadline - event.atMs;
+      const remainingMs = Math.max(0, (state.timerDeadline ?? event.atMs) - event.atMs);
       const correct = event.answerIndex === question.correctIndex;
-      const points = correct ? Math.round((1000 * remainingMs) / totalMs) : 0;
+      const points = correct ? Math.max(0, Math.round((1000 * remainingMs) / totalMs)) : 0;
       const scores: Record<string, number> = {
         ...state.scores,
         [event.playerId]: (state.scores[event.playerId] ?? 0) + points,
@@ -254,37 +255,12 @@ export function reduce(
           points,
         },
       };
-      const next: GameState = { ...state, scores, answers, firstCorrectAtMs };
-      return { state: next, effects: [{ type: 'broadcastState', state: next }] };
+      return maybeAutoReveal({ ...state, scores, answers, firstCorrectAtMs });
     }
 
     case 'reveal': {
       if (state.phase !== 'question') return { state, effects: [] };
-      const question = state.quiz.questions[state.questionIndex];
-      const results: RevealResult[] = state.players.map((p) => {
-        const answer = state.answers[p.id];
-        return answer
-          ? {
-              playerId: p.id,
-              answerIndex: answer.answerIndex,
-              correct: answer.correct,
-              points: answer.points,
-            }
-          : { playerId: p.id, answerIndex: null, correct: false, points: 0 };
-      });
-      const reveal: Reveal = {
-        questionIndex: state.questionIndex,
-        correctIndex: question.correctIndex,
-        results,
-      };
-      const next: GameState = { ...state, phase: 'reveal' };
-      return {
-        state: next,
-        effects: [
-          { type: 'broadcastReveal', reveal },
-          { type: 'broadcastState', state: next },
-        ],
-      };
+      return finishQuestion(state);
     }
 
     case 'next': {
@@ -340,6 +316,64 @@ export function reduce(
       return { state: next, effects: [{ type: 'broadcastState', state: next }] };
     }
   }
+}
+
+/**
+ * question -> reveal, the single construction shared by the host's manual
+ * `reveal` event AND the auto-reveal: reveal payload per player (join order,
+ * unanswered = null), phase swap, broadcastReveal + broadcastState.
+ */
+function finishQuestion(state: GameState): {
+  state: GameState;
+  effects: Effect[];
+} {
+  const question = state.quiz.questions[state.questionIndex];
+  const results: RevealResult[] = state.players.map((p) => {
+    const answer = state.answers[p.id];
+    return answer
+      ? {
+          playerId: p.id,
+          answerIndex: answer.answerIndex,
+          correct: answer.correct,
+          points: answer.points,
+        }
+      : { playerId: p.id, answerIndex: null, correct: false, points: 0 };
+  });
+  const reveal: Reveal = {
+    questionIndex: state.questionIndex,
+    correctIndex: question.correctIndex,
+    results,
+  };
+  const next: GameState = { ...state, phase: 'reveal' };
+  return {
+    state: next,
+    effects: [
+      { type: 'broadcastReveal', reveal },
+      { type: 'broadcastState', state: next },
+    ],
+  };
+}
+
+/** Auto-reveal: as soon as every joined player in the roster has answered the
+ *  live question, transition question -> reveal exactly like the manual
+ *  `reveal` event (scoring was already applied per answer). "Joined players"
+ *  is the engine's roster per playerJoin/playerLeave semantics — a player who
+ *  left/disconnected mid-question is still on it, so an absent player keeps
+ *  the question open and the host's manual reveal stays the fallback. Guarded
+ *  against 0 players and double-reveal (phase check; one answer slot per
+ *  player id covers the consistency of one answer per player).
+ */
+function maybeAutoReveal(next: GameState): { state: GameState; effects: Effect[] } {
+  const allAnswered =
+    next.phase === 'question' &&
+    next.players.length > 0 &&
+    next.players.every((p) => p.id in next.answers);
+  if (!allAnswered) {
+    return { state: next, effects: [{ type: 'broadcastState', state: next }] };
+  }
+  // The just-answering state is not broadcast separately: the reveal effect
+  // carries the exact same scores/answers, so the phase swap IS the update.
+  return finishQuestion(next);
 }
 
 /**

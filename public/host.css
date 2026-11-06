@@ -1010,6 +1010,256 @@ button.answer:focus-visible {
   font-weight: 800;
 }
 
+/* ---------- Host big stage (host page ONLY; scoped under body.page-host) ----------
+ * The projector /host phase screens get viewport-relative sizing (with
+ * clamp min/max caps) and fill the width AND height: less card padding, no
+ * wasted vertical space, a 2x2 toast answer grid, taller leaderboard rows
+ * and a larger podium. The countdown lives in a slim top bar above the
+ * question. player.html shares this sheet — page-player scope below is the
+ * only place these styles touch that page, never here. */
+
+/* The stage cards fill the content column's height (viewport minus the body
+ * gutters) instead of hugging their content — flex column drives the answer
+ * grid to soak up the remaining space. */
+body.page-host .card-stage {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--gutter-block) - var(--gutter-block) - 4px);
+  padding: clamp(0.75rem, 0.4rem + 1.4vw, 1.75rem);
+}
+
+/* Big shared heads: question/reveal/leaderboard/podium titles */
+body.page-host .card-stage h1 {
+  font-size: clamp(1.7rem, 1.05rem + 3vw, 3.75rem);
+}
+
+/* ---- Question: slim top bar (countdown pill + answered progress) ---- */
+
+body.page-host .question-topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: clamp(0.5rem, 0.4rem + 1vw, 1.25rem);
+}
+
+body.page-host .topbar-meta {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-muted);
+  font-weight: 700;
+  font-size: clamp(0.8rem, 0.65rem + 0.9vw, 1.2rem);
+  overflow-wrap: anywhere;
+}
+
+body.page-host .countdown-pill {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.2rem clamp(0.6rem, 0.5rem + 0.6vw, 1.1rem);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* The countdown digits are a compact display inside the pill (was a 4.6rem
+ * block above the answers); the pill keeps showing 0 after the window ends.
+ * (Digits carry the value; the timer bar next to them drains — transform-only.) */
+body.page-host .countdown-pill .countdown {
+  margin: 0;
+  font-size: clamp(1rem, 0.75rem + 1.3vw, 1.75rem);
+  text-shadow: none;
+}
+
+body.page-host .progress-timer {
+  width: clamp(5.5rem, 4rem + 7vw, 12rem);
+  height: 0.45rem;
+  margin: 0;
+}
+
+/* Small Answered X/Y pill (counts from the sanitized view; server-side
+ * auto-reveal closes the question — the host fallback stays the button). */
+body.page-host .answered-pill {
+  margin: 0;
+  flex: 0 0 auto;
+  padding: 0.25rem clamp(0.7rem, 0.55rem + 0.7vw, 1.25rem);
+  border-radius: var(--r-pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: clamp(0.8rem, 0.68rem + 0.7vw, 1.1rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Question: the big prompt + 2x2 toast grid ---- */
+
+body.page-host #question-prompt {
+  margin: clamp(0.6rem, 0.5rem + 1.6vh, 1.75rem) 0 clamp(0.4rem, 0.4rem + 1.2vh, 1.25rem);
+  font-size: clamp(2rem, 1rem + 4.4vw, 4.75rem);
+  flex: 0 1 auto;
+}
+
+body.page-host #view-question .answers {
+  flex: 1 1 auto;
+  margin-block: clamp(0.25rem, 0.5vh, 0.6rem) clamp(0.5rem, 0.4rem + 1vh, 1rem);
+  gap: clamp(0.5rem, 0.35rem + 1.1vw, 1.4rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.page-host #view-question .answers li[data-answer-index] {
+  justify-content: center;
+  text-align: center;
+  padding: clamp(0.6rem, 0.5rem + 1vw, 1.4rem);
+  min-height: clamp(4.5rem, 11vh, 11rem);
+  font-size: clamp(1.3rem, 0.8rem + 2.2vw, 2.75rem);
+  box-shadow: 0 0.5rem 0 rgb(0 0 0 / 0.28);
+  border-radius: var(--r-xl);
+}
+
+/* Trailing controls (Reveal / Next / Back) pin to the stage bottom. */
+body.page-host .card-stage > .player-button {
+  flex: 0 0 auto;
+  margin-block-start: var(--space-control-stack);
+  min-height: clamp(2.75rem, 2.25rem + 1.8vh, 4rem);
+  font-size: clamp(1rem, 0.9rem + 0.7vw, 1.5rem);
+  width: min(100%, 26rem);
+  margin-inline: auto;
+}
+
+/* ---- Reveal: the correct-answer tile fills the stage width ---- */
+
+body.page-host .correct-answer[data-answer-index] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(5.5rem, 18vh, 13rem);
+  padding: clamp(1rem, 0.8rem + 1.5vw, 2.5rem);
+  font-size: clamp(1.75rem, 1.1rem + 3vw, 4.25rem);
+  border-radius: var(--r-xl);
+  box-shadow: 0 0.5rem 0 rgb(0 0 0 / 0.3);
+}
+
+/* ---- Leaderboard: taller, larger rows (fill width, grow height) ---- */
+
+body.page-host #view-leaderboard .players {
+  flex: 1 1 auto;
+  gap: clamp(0.4rem, 0.3rem + 0.7vh, 0.85rem);
+}
+
+/* ---- Leaderboard + podium rows (host-side only) ---- */
+
+body.page-host #leaderboard .row {
+  min-height: clamp(3.25rem, 3rem + 2.4vh, 5.75rem);
+  padding: clamp(0.5rem, 0.4rem + 0.8vh, 1.1rem) clamp(0.75rem, 0.6rem + 1.2vw, 2rem);
+  border-radius: var(--r-lg);
+  font-size: clamp(1.25rem, 1rem + 1.9vw, 2.4rem);
+}
+
+body.page-host #leaderboard .row .avatar,
+body.page-host #correct-players .row .avatar {
+  width: clamp(2.4rem, 2rem + 2.2vw, 4.25rem);
+  height: clamp(2.4rem, 2rem + 2.2vw, 4.25rem);
+  font-size: clamp(1.1rem, 0.9rem + 1.2vw, 2rem);
+}
+
+body.page-host #leaderboard .row-rank {
+  font-size: clamp(1.15rem, 0.95rem + 1.4vw, 1.9rem);
+}
+
+body.page-host #leaderboard .row-score {
+  font-size: clamp(1.25rem, 1rem + 1.9vw, 2.4rem);
+}
+
+/* ---- Podium: bigger pillars + names ---- */
+
+body.page-host #view-podium #podium {
+  flex: 1 1 auto;
+  max-width: min(100%, 42rem);
+  margin-inline: auto;
+  gap: clamp(0.75rem, 0.5rem + 2vw, 2.5rem);
+}
+
+body.page-host #podium .row {
+  max-width: clamp(10rem, 6rem + 10vw, 15rem);
+  font-size: clamp(1.15rem, 0.95rem + 1.4vw, 2rem);
+}
+
+body.page-host #podium .row:nth-child(1)::after {
+  height: clamp(7rem, 4rem + 16vh, 18rem);
+}
+
+body.page-host #podium .row:nth-child(2)::after {
+  height: clamp(4.5rem, 2.5rem + 11vh, 12.5rem);
+}
+
+body.page-host #podium .row:nth-child(3)::after {
+  height: clamp(3.25rem, 1.75rem + 8vh, 9.25rem);
+}
+
+body.page-host #podium .row .avatar {
+  width: clamp(2.6rem, 2.2rem + 2.4vw, 4.75rem);
+  height: clamp(2.6rem, 2.2rem + 2.4vw, 4.75rem);
+  font-size: clamp(1.2rem, 1rem + 1.3vw, 2.2rem);
+}
+
+/* ---------- Player portrait bump (player page ONLY; scoped under
+ * body.page-player) ----------
+ * Single-column, full-width answer rows filling the phone better; moderate
+ * type/height bumps on the question, reveal, leaderboard and podium. No
+ * countdown anywhere (the hidden scoring window stays server-side). */
+
+/* The join/lobby shell keeps its readable column; the phase cards use the
+ * space they have. */
+body.page-player .card {
+  padding: clamp(0.9rem, 0.6rem + 2vw, 1.5rem) clamp(0.9rem, 0.7rem + 2.4vw, 1.75rem);
+}
+
+body.page-player #question h1 {
+  font-size: clamp(1.55rem, 1.2rem + 2.6vw, 2.6rem);
+}
+
+/* One answer per line: full width, comfortably tappable, no 2x2. */
+body.page-player #options.answers {
+  grid-template-columns: 1fr;
+  gap: clamp(0.5rem, 1.4vh, 0.8rem);
+  margin-block: clamp(0.85rem, 2vh, 1.4rem) clamp(0.85rem, 2.2vh, 1.5rem);
+}
+
+body.page-player #options button.answer {
+  min-height: clamp(3.5rem, 0.75rem + 7vh, 5rem);
+  padding: clamp(0.65rem, 1.4vh, 1rem) clamp(0.85rem, 2.5vw, 1.25rem);
+  font-size: clamp(1.15rem, 1.05rem + 1.1vw, 1.6rem);
+  text-align: center;
+}
+
+/* Reveal + standings get a moderate bump (portrait-friendly). */
+body.page-player #reveal h1 {
+  font-size: clamp(1.9rem, 1.5rem + 3vw, 3rem);
+}
+
+body.page-player .result-points {
+  font-size: clamp(2rem, 1.5rem + 3.4vw, 3.2rem);
+}
+
+body.page-player #correct-answer {
+  font-size: clamp(1.3rem, 1.1rem + 1.8vw, 1.9rem);
+}
+
+body.page-player .rank-line {
+  font-size: clamp(1.5rem, 1.2rem + 2.6vw, 2.5rem);
+}
+
+body.page-player .score-big {
+  font-size: clamp(1.6rem, 1.3rem + 2.8vw, 2.6rem);
+}
+
+body.page-player .avatar-row .avatar {
+  width: clamp(2.5rem, 2.1rem + 1.6vw, 3.4rem);
+  height: clamp(2.5rem, 2.1rem + 1.6vw, 3.4rem);
+  font-size: clamp(1.2rem, 1rem + 1vw, 1.7rem);
+}
+
 /* ---------- Arabic-only hard overrides ----------
  * Letter-spacing breaks the connected Arabic glyphs, and tabular digits are
  * Latin-numeric concerns only. */

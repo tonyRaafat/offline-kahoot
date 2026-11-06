@@ -368,28 +368,31 @@ describe('question cycle socket contract', () => {
         options: q0.options,
         timeSeconds: q0.timeSeconds,
         timerDeadline: expect.any(Number),
+        answeredCount: 0,
+        playerCount: 2,
       });
       // The server must not leak the correct answer during the question phase.
       expect(JSON.stringify(s0)).not.toContain('correctIndex');
 
-      const answeredBatch = nextBatch<StateViewPayload>(host, 'state', 2);
+      // p1's answer alone keeps the question live (p2 still hasn't answered):
+      // exactly one state broadcast, with the answered progress.
+      const answeredBatch = nextBatch<StateViewPayload>(host, 'state', 1);
       p1.emit('answer', { answerIndex: q0.correctIndex });
-      p2.emit('answer', { answerIndex: q0.correctIndex });
-      const [a1, afterAnswers] = await answeredBatch; // second state = after both answers
+      const [a1] = await answeredBatch;
+      expect(a1.phase).toBe('question');
+      expect(a1.currentQuestion).toMatchObject({ answeredCount: 1, playerCount: 2 });
       expect(a1.scores[id1]).toBeGreaterThan(0);
       expect(a1.scores[id2]).toBeUndefined();
-      expect(afterAnswers.phase).toBe('question');
-      expect(afterAnswers.scores[id1]).toBeGreaterThan(0);
-      expect(afterAnswers.scores[id2]).toBeGreaterThan(0);
 
+      // p2's answer completes the roster -> AUTO-REVEAL (host shows nothing).
       const revealOnP1 = nextEvent<RevealPayload>(p1, 'reveal');
       const revealBatch = nextBatch<StateViewPayload>(host, 'state', 1);
-      host.emit('reveal');
+      p2.emit('answer', { answerIndex: q0.correctIndex });
       const reveal = await revealOnP1;
       const [revealState] = await revealBatch;
+      expect(revealState.phase).toBe('reveal');
       expect(reveal.questionIndex).toBe(0);
       expect(reveal.correctIndex).toBe(q0.correctIndex);
-      expect(revealState.phase).toBe('reveal');
       expect(reveal.results).toHaveLength(2);
       expect(reveal.results).toEqual(
         expect.arrayContaining([
@@ -423,18 +426,19 @@ describe('question cycle socket contract', () => {
           options: question.options,
           timeSeconds: question.timeSeconds,
           timerDeadline: expect.any(Number),
+          answeredCount: 0,
+          playerCount: 2,
         });
 
-        const answeredBatchN = nextBatch<StateViewPayload>(host, 'state', 2);
+        // Queue both states eagerly ([p1's mid-question state, the
+        // auto-reveal state]) so the wire order is deterministic.
+        const roundStates = nextBatch<StateViewPayload>(host, 'state', 2);
+        const revealN = nextEvent<RevealPayload>(p1, 'reveal');
         p1.emit('answer', { answerIndex: question.correctIndex });
         p2.emit('answer', { answerIndex: question.correctIndex });
-        await answeredBatchN;
-
-        const revealN = nextEvent<RevealPayload>(p1, 'reveal');
-        const revealBatchN = nextBatch<StateViewPayload>(host, 'state', 1);
-        host.emit('reveal');
-        expect((await revealN).correctIndex).toBe(question.correctIndex);
-        const [revealStateN] = await revealBatchN;
+        const [midState, revealStateN] = await roundStates;
+        expect(midState.phase).toBe('question');
+        expect((await revealN).correctIndex).toBe(question.correctIndex); // auto-reveal on the last answer
         expect(revealStateN.phase).toBe('reveal');
       }
 
@@ -499,9 +503,12 @@ describe('question cycle socket contract', () => {
       const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
-      const joinDrain = nextBatch<StateViewPayload>(player, 'state', 1);
+      // A second player who never answers keeps the question live after
+      // Capitan's first answer (no auto-reveal).
+      const joinStates = nextBatch<StateViewPayload>(player, 'state', 2);
       const { playerId } = await joinPlayer(player, 'Capitan');
-      await joinDrain;
+      await joinPlayer(openAt(boot.baseUrl), 'Silence');
+      await joinStates;
       const startBatch = nextBatch<StateViewPayload>(player, 'state', 1);
       host.emit('hostStart');
       await startBatch;
@@ -545,7 +552,7 @@ describe('question cycle socket contract', () => {
     }
   });
 
-  it('rejects an answer submitted after the deadline with late', async () => {
+  it('accepts an answer after the deadline with 0 points (hidden scoring window) and auto-reveals', async () => {
     const boot = await bootQuizServer();
     try {
       vi.useFakeTimers({ toFake: ['Date'] });
@@ -565,9 +572,18 @@ describe('question cycle socket contract', () => {
       const deadline = started.currentQuestion!.timerDeadline; // deadline straight off the wire
       vi.setSystemTime(deadline + 1);
 
-      const rejected = nextEvent<AnswerRejectedPayload>(player, 'answerRejected');
+      // Past the deadline the answer is no longer REJECTED: it is accepted
+      // with 0 points. The single-player roster is then fully answered, so
+      // the auto-reveal fires — assert the reveal instead of a rejection.
+      const reveal = nextEvent<RevealPayload>(player, 'reveal');
       player.emit('answer', { answerIndex: q0.correctIndex });
-      await expect(rejected).resolves.toEqual({ reason: 'late' });
+      await expect(reveal).resolves.toMatchObject({
+        questionIndex: 0,
+        correctIndex: q0.correctIndex,
+      });
+      const results = (await reveal).results;
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ correct: true, points: 0 });
     } finally {
       vi.useRealTimers();
       await teardownBoot(boot);
@@ -580,9 +596,12 @@ describe('question cycle socket contract', () => {
       const host = openAt(boot.baseUrl, { auth: true });
       host.emit('host');
       const player = openAt(boot.baseUrl);
-      const joinDrain = nextBatch<StateViewPayload>(host, 'state', 1);
+      // A second player who never answers keeps the question open after the
+      // Returnee answers (otherwise the auto-reveal would close the round).
+      const joinStates = nextBatch<StateViewPayload>(host, 'state', 2);
       const { playerId, name } = await joinPlayer(player, 'Returnee');
-      await joinDrain;
+      await joinPlayer(openAt(boot.baseUrl), 'Keepalive');
+      await joinStates;
 
       const startBatch = nextBatch<StateViewPayload>(host, 'state', 1);
       host.emit('hostStart');
@@ -633,21 +652,20 @@ async function playRoundToPodium(
   player: ClientSocket,
   correctIndex: number,
 ): Promise<void> {
-  const startBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+  // Queue the next two states together (nextBatch's eager waiters consume
+  // events in order, so a per-step race would double-consume the first): the
+  // question-phase state, then — the single player answering completes the
+  // roster — the auto-reveal state that closes the round.
+  const stateQueue = nextBatch<StateViewPayload>(player, 'state', 2);
   host.emit('hostStart');
-  const [questionState] = await startBatch;
-  expect(questionState.currentQuestion).not.toBeNull();
-
-  const answeredBatch = nextBatch<StateViewPayload>(player, 'state', 1);
-  player.emit('answer', { answerIndex: correctIndex });
-  const [answered] = await answeredBatch;
-  expect(answered.phase).toBe('question');
-
   const revealDrain = nextEvent<RevealPayload>(player, 'reveal');
-  const revealStateBatch = nextBatch<StateViewPayload>(host, 'state', 1);
-  host.emit('reveal');
+  player.emit('answer', { answerIndex: correctIndex });
+  const [questionState, answered] = await stateQueue;
+  expect(questionState.currentQuestion).not.toBeNull();
+  expect(questionState.phase).toBe('question');
+  expect(answered.phase).toBe('reveal');
+  expect(Object.keys(answered.scores)).toHaveLength(1);
   await revealDrain;
-  await revealStateBatch;
 
   const leaderboardBatch = nextBatch<StateViewPayload>(host, 'state', 1);
   host.emit('next');

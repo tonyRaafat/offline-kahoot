@@ -10,7 +10,9 @@
   <!-- Full bright-Kahoot reskin (this task supersedes the old "player stays
        plain" decision): /play opts into .bg-kahoot for the purple field +
        white chunky shells from host.css/tokens.css. -->
-  <body class="bg-kahoot">
+  <!-- page-player scopes the player's portrait-portrait phase styling in
+       host.css (the host page shares the sheet and must not get it). -->
+  <body class="bg-kahoot page-player">
     <main class="card" id="entering">
       <h1 data-i18n="player.joinTitle">Join the game</h1>
 
@@ -77,12 +79,8 @@
       </p>
       <h1 id="question-prompt"></h1>
       <ol id="options" class="answers"></ol>
-      <p
-        id="countdown"
-        class="countdown"
-        aria-label="Seconds left"
-        data-i18n-attr="aria-label:host.timeLeft"
-      ></p>
+      <!-- No countdown: the hidden scoring window belongs to the server –
+           the player never sees a timer (jobs/ui spec). -->
       <p id="answer-status" class="status" role="status"></p>
     </main>
 

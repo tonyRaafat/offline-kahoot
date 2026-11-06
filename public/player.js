@@ -37,7 +37,6 @@ const lobbyPlayersEl = document.getElementById('lobby-players');
 const questionNumberEl = document.getElementById('question-number');
 const questionPromptEl = document.getElementById('question-prompt');
 const optionsEl = document.getElementById('options');
-const countdownEl = document.getElementById('countdown');
 const answerStatus = document.getElementById('answer-status');
 const resultTitle = document.getElementById('result-title');
 const resultPoints = document.getElementById('result-points');
@@ -96,7 +95,9 @@ let shownQuestionIndex = null; // question index currently on screen
 let lastQuestion = null; // CurrentQuestionView of the shown question
 let submitted = false; // one answer per question
 let revealData = null; // last `reveal` payload
-let countdownTimer = null;
+// (No countdown here: the hidden scoring window belongs to the server; the
+// player never sees a timer.)
+
 let myColor = null; // avatar color confirmed by the server
 
 // ---- Avatar color picker (join form) ---------------------------------------
@@ -179,27 +180,7 @@ function show(name) {
   for (const [key, card] of Object.entries(cards)) card.hidden = key !== name;
 }
 
-function stopCountdown() {
-  if (countdownTimer !== null) {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
-  }
-  countdownEl.textContent = '';
-}
-
-function startCountdown(timerDeadline) {
-  stopCountdown();
-  const tick = () => {
-    countdownEl.textContent = String(
-      Math.max(0, Math.ceil((timerDeadline - Date.now()) / 1000)),
-    );
-  };
-  tick();
-  countdownTimer = setInterval(tick, 250);
-}
-
 function showLobby() {
-  stopCountdown();
   show('lobby');
   renderLobbyRoster(latestView);
 }
@@ -225,7 +206,6 @@ function renderQuestion(question, view) {
   lastQuestion = question;
   shownQuestionIndex = question.questionIndex;
   submitted = question.questionIndex === lockedQuestionIndex;
-  stopCountdown();
   show('question');
   questionNumberEl.textContent = String(question.questionIndex + 1);
   questionPromptEl.textContent = question.prompt;
@@ -249,7 +229,6 @@ function renderQuestion(question, view) {
     for (const button of optionsEl.querySelectorAll('button')) button.disabled = true;
     set(answerStatus, 'player.answerLocked');
   }
-  startCountdown(question.timerDeadline);
 }
 
 function submitAnswer(answerIndex, button) {
@@ -262,7 +241,6 @@ function submitAnswer(answerIndex, button) {
 
 function renderResult() {
   if (!revealData) return;
-  stopCountdown();
   show('reveal');
   const mine = revealData.results.find((result) => result.playerId === myId);
   const correct = mine?.correct ?? false;
@@ -276,7 +254,6 @@ function renderResult() {
 }
 
 function renderStandings(view, name) {
-  stopCountdown();
   show(name);
   const rank = view.leaderboard.indexOf(myId);
   if (rank >= 0) {
@@ -419,7 +396,6 @@ socket.on('state', (view) => {
       const question = view.currentQuestion;
       if (!question) return;
       if (question.questionIndex !== shownQuestionIndex) renderQuestion(question, view);
-      else if (!submitted) startCountdown(question.timerDeadline);
       break;
     }
     case 'reveal':
