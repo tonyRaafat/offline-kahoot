@@ -4,8 +4,30 @@
  * pulse — all token-paced, all disabled by prefers-reduced-motion via the
  * zeroed motion tokens / no-preference gates. */
 
-.dashboard-card {
-  max-width: 64rem;
+/* Full-bleed (ui-redesign): no capped/centered dashboard card — the grid,
+ * the create row and the live banner use the whole content column; the
+ * quiz-card grid keeps a minimum column so rows stay balanced. */
+:root {
+  --content-max: 76rem;
+}
+
+/* Wide admin screens still get a readable line/column for the header and
+ * the create row (no boxed card, just an internal measure). */
+.dash-head,
+.create-row,
+.live-banner {
+  margin-inline: auto;
+  width: min(100%, var(--content-max));
+}
+
+.dash-head-row,
+.create-row {
+  margin-inline: 0;
+}
+
+.entering-note,
+.dash-head {
+  max-width: var(--content-max);
 }
 
 /* Quiz-card column sizing token (issue 01): the smallest comfortable card
@@ -52,7 +74,7 @@
   padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
-  background: var(--neon-soft);
+  background: var(--primary-soft);
   color: var(--ink);
   font-weight: 700;
   text-decoration: none;
@@ -63,7 +85,7 @@
 }
 
 .live-banner:hover {
-  border-color: var(--neon);
+  border-color: var(--accent);
   filter: brightness(1.06);
   transform: translateY(-2px);
 }
@@ -80,8 +102,8 @@
   width: 0.65rem;
   height: 0.65rem;
   border-radius: 50%;
-  background: var(--neon);
-  box-shadow: 0 0 0 0 rgb(26 255 176 / 0.5);
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgb(128 117 255 / 0.5);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -92,10 +114,10 @@
   @keyframes live-pulse {
     0%,
     100% {
-      box-shadow: 0 0 0 0 rgb(26 255 176 / 0.45);
+      box-shadow: 0 0 0 0 rgb(128 117 255 / 0.45);
     }
     50% {
-      box-shadow: 0 0 0 7px rgb(26 255 176 / 0);
+      box-shadow: 0 0 0 7px rgb(128 117 255 / 0);
     }
   }
 }
@@ -103,7 +125,7 @@
 .live-banner::after {
   content: '→';
   margin-inline-start: auto;
-  color: var(--neon);
+  color: var(--accent);
   font-weight: 800;
 }
 
@@ -179,7 +201,7 @@ html[dir='rtl'] .live-banner::after {
 }
 
 .quiz-card:focus-within {
-  border-color: var(--neon);
+  border-color: var(--accent);
 }
 
 .quiz-card-title {
@@ -208,8 +230,8 @@ html[dir='rtl'] .live-banner::after {
   align-self: start;
   margin: 0 0 var(--sp-2);
   padding: var(--sp-1) var(--sp-3);
-  background: var(--gold);
-  color: var(--gold-ink);
+  background: var(--accent);
+  color: var(--accent-ink);
   font-size: var(--fs-xs);
   font-weight: 800;
   border-radius: var(--r-pill);
@@ -269,7 +291,7 @@ html[dir='rtl'] .live-banner::after {
 .icon-btn:hover {
   border-color: var(--line-strong);
   color: var(--ink);
-  background: var(--neon-soft);
+  background: var(--primary-soft);
   transform: translateY(-1px);
 }
 
@@ -284,7 +306,7 @@ html[dir='rtl'] .live-banner::after {
 }
 
 .icon-btn:focus-visible {
-  outline: 2px solid var(--neon);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 

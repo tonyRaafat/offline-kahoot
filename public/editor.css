@@ -8,7 +8,9 @@
 
 .card.editor-card {
   text-align: start;
-  /* Same width as the dashboard card: one shared rhythm for the admin pages. */
+  /* Full-bleed layout everywhere; the editor is the one genuinely text-dense
+   * screen, so its content column keeps an internal readable measure —
+   * with NO bordered box around it. */
   max-width: 64rem;
 }
 
@@ -77,7 +79,7 @@
 
 .question-card h3 {
   margin: 0 0 var(--sp-4);
-  color: var(--gold);
+  color: var(--accent);
   font-size: var(--fs-md);
   font-weight: 800;
 }
@@ -126,8 +128,8 @@
 
 .ed-input:focus {
   outline: none;
-  border-color: var(--neon);
-  box-shadow: var(--glow-neon);
+  border-color: var(--accent);
+  box-shadow: var(--glow-accent);
 }
 
 /* Labels wrap their controls in editor.js; undo the label role on the control
@@ -148,7 +150,7 @@
 .option-row input[type='radio'] {
   width: 1.4rem;
   height: 1.4rem;
-  accent-color: var(--neon);
+  accent-color: var(--accent);
   cursor: pointer;
 }
 

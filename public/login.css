@@ -7,8 +7,16 @@
  * is only what no other page shares: the centered splash heading and the
  * tilted spring-settle entrance. */
 
+/* Full-bleed layout (ui-redesign); the login form keeps an internal
+ * readable measure for its single column — content, no bordered box. */
+#login-card {
+  max-width: 32rem;
+}
+
+/* Column is left-aligned now that the boxed card is gone; the splash
+ * "Log in" oversized heading keeps the card-head rhythm. */
 .card-head {
-  text-align: center;
+  text-align: start;
 }
 
 .card-head h1 {

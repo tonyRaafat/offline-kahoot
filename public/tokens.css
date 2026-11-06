@@ -1,7 +1,11 @@
 /* tokens.css — the design-token layer, loaded before every page stylesheet.
  * Everything else references these via var(--…); no one-off magic values.
- * Palette keeps the offline-Kahoot identity: night-purple surfaces + neon
- * mint/gold accents, extended into a full scale.
+ * Also owns the full-width brand bar (html::before) shown on every page.
+ * Palette (ui-redesign): deep warm plum-black surfaces (#211a1d) with an
+ * electric-indigo/medium-slate-blue accent pair — --primary for solid
+ * action surfaces, --accent for hover states and accent-on-dark text.
+ * The Kahoot answer colors stay untouched (they are semantic, owned by
+ * avatar.js / src/avatar-colors.ts).
  *
  * Issue-04 contract: motion tokens (--motion-*, --ease-*) are what the
  * FLIP/count-up animations must consume, so the reduced-motion block below
@@ -77,24 +81,24 @@
   color-scheme: dark;
 
   /* ---- Color ---- */
-  --bg: #241943;                      /* app backdrop, deepest night purple */
-  --bg-glow: #37246b;                 /* ambient glow layer */
-  --surface: #3d2b70;                 /* cards */
-  --surface-raised: #4a3792;          /* hover / raised rows */
-  --surface-sunken: #2b1e50;          /* inputs, inner panels, answer base */
-  --line: #4b3b8f;                    /* hairline borders */
-  --line-strong: #6a56c2;             /* hovered / focused borders */
+  --bg: #211a1d;                      /* app backdrop, deep warm plum-black */
+  --bg-glow: #2f2138;                 /* ambient glow layer (indigo-tinted) */
+  --surface: #2b2126;                 /* inner surfaces, row cards */
+  --surface-raised: #3a2c33;          /* hover / raised rows */
+  --surface-sunken: #1a1417;          /* inputs, inner panels, answer base */
+  --line: #443540;                    /* hairline borders */
+  --line-strong: #6d5a75;             /* hovered / focused borders */
 
-  --ink: #ffffff;
-  --ink-muted: #b8a8dd;
-  --ink-faint: #8d7cc0;
+  --ink: #f8f0fb;                     /* text on dark */
+  --ink-muted: #cad5ca;               /* secondary text */
+  --ink-faint: #9aa99d;               /* faintest text (labels, placeholders) */
 
-  --neon: #1affb0;                    /* primary action */
-  --neon-soft: #1affb01f;             /* neon tint wash */
-  --neon-ink: #143529;                /* text on neon */
+  --primary: #6320ee;                 /* primary action (buttons/CTAs) */
+  --accent: #8075ff;                  /* hover state + accent text/icons on dark */
+  --on-primary: #f8f0fb;              /* text on primary */
+  --primary-soft: #6320ee24;          /* primary tint wash */
+  --accent-ink: #211a1d;              /* dark text on accent chips */
 
-  --gold: #ffd23f;                    /* timer, highlight */
-  --gold-ink: #3d3009;
   --rose: #ff6b81;                    /* danger / wrong */
   --rose-ink: #401313;
 
@@ -163,8 +167,7 @@
   /* ---- Elevation ---- */
   --shadow-card: 0 12px 40px rgb(0 0 0 / 0.38), 0 2px 6px rgb(0 0 0 / 0.22);
   --shadow-pop: 0 18px 48px rgb(0 0 0 / 0.45);
-  --glow-neon: 0 0 0 1px rgb(26 255 176 / 0.35), 0 0 24px rgb(26 255 176 / 0.25);
-  --glow-gold: 0 0 0 1px rgb(255 210 63 / 0.4), 0 0 24px rgb(255 210 63 / 0.28);
+  --glow-accent: 0 0 0 1px rgb(128 117 255 / 0.45), 0 0 24px rgb(128 117 255 / 0.28);
 
   /* ---- Z-index scale ---- */
   --z-raised: 10;      /* in-page pop, e.g. selected swatch outline parity */
@@ -182,6 +185,33 @@
    * one deliberately long for the decorative layers tied to it. */
   --motion-enter: 480ms;      /* page-load / phase-card entrances */
   --motion-drift: 36s;        /* ambient bg-shape drift (opacity/transform only) */
+
+  /* ux-04 additions: podium medal ranks + the rank-change chip hold. All
+   * additive; the zeroing reduced-motion block below catches the duration. */
+  --motion-hold: 2400ms;      /* rank-change chip visible-then-fade cycle */
+  --medal-gold: #ffd400;      /* 1st (semantic, ≠ the yellow answer tile) */
+  --medal-gold-ink: #1d1d1d;
+  --medal-silver: #c8cdd8;    /* 2nd */
+  --medal-silver-ink: #23262e;
+  --medal-bronze: #cd7f32;    /* 3rd */
+  --medal-bronze-ink: #fbf1e4;
+  --gain: #6fdc8c;            /* rank-moved-UP chip (loss uses --rose) */
+}
+
+/* =============================================================
+ * Brand bar — one slim full-width color line pinned to the very top of
+ * EVERY page (all sheets load tokens.css). It replaces the old per-card
+ * neon→gold hairline: the identity accent now lives on the viewport edge,
+ * above any content chrome. Purely decorative.
+ * ============================================================= */
+html::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: 4px;
+  z-index: calc(var(--z-toggle) + 1); /* stays above the language toggle layer */
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  pointer-events: none;
 }
 
 /* Reduced motion: collapse the whole tokenized motion system to instant.
@@ -192,6 +222,7 @@
     --motion-base: 0ms;
     --motion-slow: 0ms;
     --motion-enter: 0ms;
+    --motion-hold: 0ms;
   }
   /* The ambient drift runs on its own (long) duration — stop it explicitly.
    * `.bg-kahoot::before/::after` are the only ambient decorative layers now
@@ -205,7 +236,7 @@
 }
 
 /* =============================================================
- * .bg-kahoot — the purple geometric Kahoot backdrop (issue 05)
+ * .bg-kahoot — the indigo-on-plum geometric Kahoot backdrop (issue 05)
  * Pure CSS (gradients + rotated pseudo-elements: no images, no CDN),
  * showcasing the tilted-confetti vocabulary of the game while staying
  * transform/opacity-only so competitive rows animate over it smoothly.
@@ -222,17 +253,17 @@
   will-change: transform;
 }
 
-/* Layer 1 (behind) — the tilted purple geometric underlay:
- *   - huge soft radial glows in the existing glow/surface purples;
+/* Layer 1 (behind) — the tilted geometric underlay:
+ *   - huge soft radial glows in the primary/accent indigo family;
  *   - a BIG tilted checkerboard (two alternating cell purples rotated as a
  *     whole layer — the unmistakable Kahoot-quiz backdrop, kept whisper-quiet)
  * painted only as gradients. A slow diagonal drift (transform-only) keeps the
  * scene just alive without stealing attention from the game. */
 .bg-kahoot::before {
   background:
-    radial-gradient(52rem 30rem at 24% 30%, rgb(103 76 202 / 0.34), transparent 65%),
-    radial-gradient(46rem 28rem at 82% 74%, rgb(77 54 148 / 0.42), transparent 60%),
-    radial-gradient(20rem 14rem at 70% 12%, rgb(26 255 176 / 0.05), transparent 70%),
+    radial-gradient(52rem 30rem at 24% 30%, rgb(99 32 238 / 0.2), transparent 65%),
+    radial-gradient(46rem 28rem at 82% 74%, rgb(99 32 238 / 0.22), transparent 60%),
+    radial-gradient(20rem 14rem at 70% 12%, rgb(128 117 255 / 0.05), transparent 70%),
     repeating-conic-gradient(
       from 0deg,
       rgb(255 255 255 / 0.016) 0deg 90deg,
@@ -257,7 +288,7 @@
 }
 
 /* Layer 2 (front) — a handful of flat accent shapes: rotated square frames,
- * a wedge (triangle) and neon/gold confetti dots, all as gradient layers on
+ * a wedge (triangle) and accent/bone confetti dots, all as gradient layers on
  * one composited pseudo-element (opacity/transform only — the projected
  * host screen must stay smooth under leaderboard animations). */
 .bg-kahoot::after {
@@ -265,12 +296,12 @@
     /* tilted square frame, upper left */
     linear-gradient(var(--bg-glow), var(--bg-glow)),
     /* triangle wedge, mid right */
-    conic-gradient(from 140deg at 50% 100%, rgb(77 54 148 / 0.4) 0 40deg, transparent 40deg),
+    conic-gradient(from 140deg at 50% 100%, rgb(99 32 238 / 0.16) 0 40deg, transparent 40deg),
     /* tilted square frame, lower right */
     linear-gradient(var(--line) , var(--line)),
-    /* confetti: neon dot, gold dot */
-    radial-gradient(circle at 50% 50%, var(--neon) 0 42%, transparent 46%),
-    radial-gradient(circle at 50% 50%, var(--gold) 0 34%, transparent 38%);
+    /* confetti: accent dot, bone dot */
+    radial-gradient(circle at 50% 50%, var(--accent) 0 42%, transparent 46%),
+    radial-gradient(circle at 50% 50%, var(--ink-faint) 0 34%, transparent 38%);
   background-size:
     7.5rem 7.5rem,
     9rem 7rem,

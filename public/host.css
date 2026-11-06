@@ -25,15 +25,21 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: var(--sp-4);
+  /* Full-bleed flow (ui-redesign): no grid centering, no outer card —
+   * content fills the page behind ONE fluid responsive gutter. */
+  --gutter-block: clamp(1.25rem, 0.75rem + 2.5vw, 3.25rem);
+  --gutter-inline: clamp(1.25rem, 1rem + 3.5vw, 4rem);
+  /* top edge clears the fixed 4px brand bar */
+  padding:
+    calc(var(--gutter-block) + 4px)
+    var(--gutter-inline)
+    var(--gutter-block);
   font-family: var(--font-body);
   font-size: var(--fs-base);
   line-height: var(--lh-body); /* issue 01: real line-height, not a spacing token */
   background:
     radial-gradient(58rem 34rem at 24% -12%, var(--bg-glow), transparent 62%),
-    radial-gradient(48rem 30rem at 108% 118%, rgb(26 255 176 / 0.06), transparent 55%),
+    radial-gradient(48rem 30rem at 108% 118%, rgb(128 117 255 / 0.07), transparent 55%),
     var(--bg);
   color: var(--ink);
 }
@@ -42,7 +48,7 @@ body {
  * The only recolor is the ink ring on the saturated answer tiles, where
  * neon-on-neon palette backgrounds need the contrast. */
 :focus-visible {
-  outline: 3px solid var(--neon);
+  outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -115,16 +121,18 @@ body {
   color: var(--ink);
 }
 
+/* ---------- Unboxed full-bleed content containers ----------
+ * The bordered/centered phase card is gone (ui-redesign): .card is now a
+ * plain full-width content column, and page structure comes from internal
+ * components (panels, rows, lists) plus the shared body gutter. */
 .card {
   width: 100%;
-  max-width: 30rem;
-  padding: clamp(var(--sp-5), 3vw, var(--sp-7));
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-  position: relative;
-  overflow: hidden;
+}
+
+/* The player join form is the phone-first column of its page: a readable
+ * internal measure, no box. Phase screens above it stay genuinely full-bleed. */
+#entering {
+  max-width: 36rem;
 }
 
 /* ---------- Vertical rhythm (issue 01) ----------
@@ -148,18 +156,10 @@ body {
 
 /* ---------- Cards: the phase screens ---------- */
 
-.card::before {
-  /* top accent hairline — the one flash of color each phase screen gets */
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 4px;
-  background: linear-gradient(90deg, var(--neon), var(--gold));
-}
-
-.card-wide {
-  max-width: 56rem;
-}
+/* The accent stripe the cards used to carry now lives on html::before
+ * (tokens.css): one slim full-width brand bar at the top of every page,
+ * so no per-card ::before treatment is needed here. .card-wide keeps no
+ * special width of its own — everything flows full-bleed. */
 
 h1 {
   margin: 0 0 var(--sp-4);
@@ -176,7 +176,7 @@ h1 {
   margin: 0 0 var(--sp-4);
   padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--line);
-  border-inline-start: 3px solid var(--gold);
+  border-inline-start: 3px solid var(--accent);
   border-radius: var(--r-sm);
   background: var(--surface-sunken);
   color: var(--ink-muted);
@@ -216,8 +216,8 @@ h1 {
   font-weight: 800;
   letter-spacing: 0.28em;
   margin-inline-start: 0.28em; /* optically center the tracked digits */
-  color: var(--neon);
-  text-shadow: 0 0 26px rgb(26 255 176 / 0.35);
+  color: var(--accent);
+  text-shadow: 0 0 26px rgb(128 117 255 / 0.35);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -254,8 +254,8 @@ h1 {
 .player-input:focus,
 .quiz-select:focus {
   outline: none;
-  border-color: var(--neon);
-  box-shadow: var(--glow-neon);
+  border-color: var(--accent);
+  box-shadow: var(--glow-accent);
 }
 
 .quiz-select {
@@ -272,8 +272,8 @@ h1 {
   width: 100%;
   border: none;
   border-radius: var(--r-md);
-  background: var(--neon);
-  color: var(--neon-ink);
+  background: var(--primary);
+  color: var(--on-primary);
   font-weight: 800;
   font-size: var(--fs-md);
   cursor: pointer;
@@ -282,8 +282,10 @@ h1 {
   box-shadow: 0 0.3rem 0 rgb(0 0 0 / 0.22);
 }
 
+/* Hover goes to --accent (the secondary): the CTA visibly brightens
+ * instead of leaning on a brightness filter alone. */
 .player-button:hover:enabled {
-  filter: brightness(1.08);
+  background: var(--accent);
   transform: translateY(-2px);
 }
 
@@ -317,7 +319,7 @@ button.answer:disabled {
 }
 
 .player-button.secondary:hover:enabled {
-  border-color: var(--neon);
+  border-color: var(--accent);
   filter: none;
 }
 
@@ -360,10 +362,10 @@ button.answer:disabled {
 }
 
 .join-url {
-  color: var(--neon);
+  color: var(--accent);
   font-size: var(--fs-md);
   font-weight: 700;
-  text-decoration-color: rgb(26 255 176 / 0.4);
+  text-decoration-color: rgb(128 117 255 / 0.45);
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
   overflow-wrap: anywhere;
@@ -406,19 +408,134 @@ button.answer:disabled {
 }
 
 .players .row {
-  /* podium/leaderboard rows (host.js renderScoredList) */
+  /* podium/leaderboard rows (host.js renderScoredList — ux-04). The FLIP
+   * transform/transition is owned by host.js inline styles; nothing here
+   * may put a global `transition` on rows. */
   justify-content: space-between;
+}
+
+/* Avatar wrapper inside a row skeleton: transparent to the flex layout. */
+.row-avatar-slot {
+  display: contents;
+}
+
+/* ---------- Scoreboard motion: badges, moves, deltas, podium (ux-04) ----------
+ * Layout is UNCHANGED from the plain rows — these are additive accents —
+ * all durations/easings consumed from tokens.css (the reduced-motion block
+ * there plus host.js's matchMedia checks degrade the whole suite to instant). */
+
+/* Gold / silver / bronze rank badges — top 3 only. The rank number becomes
+ * a small round medal chip; row geometry otherwise untouched. */
+.row-rank.medal-1,
+.row-rank.medal-2,
+.row-rank.medal-3 {
+  min-width: 1.9em;
+  height: 1.9em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 800;
+  box-shadow: inset 0 -0.15em 0.3em rgb(0 0 0 / 0.28);
+}
+
+.row-rank.medal-1 { background: var(--medal-gold); color: var(--medal-gold-ink); }
+.row-rank.medal-2 { background: var(--medal-silver); color: var(--medal-silver-ink); }
+.row-rank.medal-3 { background: var(--medal-bronze); color: var(--medal-bronze-ink); }
+
+/* Rank-change chip (▲/▼ + places moved), colored by direction, then fades
+ * via .row-delta-live's token-paced cycle (host.js hides it afterwards). */
+.row-delta {
+  flex: 0 0 auto;
+  margin-inline-start: var(--sp-2);
+  color: var(--ink-faint);
+  font-size: 0.82em;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.row-delta[data-dir='up'] { color: var(--gain); }
+.row-delta[data-dir='down'] { color: var(--rose); }
+
+/* Winner row accent: gold border + soft glow (the pop comes further down). */
+.players .row.podium-winner {
+  border-color: var(--medal-gold);
+  box-shadow: 0 0 18px rgb(255 212 0 / 0.16), inset 0 0 0 1px rgb(255 212 0 / 0.3);
+}
+
+/* Podium skeleton slot while the suspense hasn't revealed a rank yet:
+ * honest dashed placeholder, geometry identical to a filled row so each
+ * reveal is an unmask (never a layout shift). The pre-filled content is
+ * hidden with visibility so the rank/score colors can't leak through. */
+.players .row.podium-slot {
+  border-style: dashed;
+  background: transparent;
+  min-height: 3.4rem;
+}
+
+.players .row.podium-slot > * {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Row stagger (first leaderboard visit) + podium reveal pop share one
+   * spring entrance; winner gets its own one-shot overshoot on top. */
+  .players .row.row-enter,
+  .players .row.podium-reveal {
+    animation: row-in var(--motion-base) var(--ease-spring) backwards;
+  }
+
+  @keyframes row-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.97);
+    }
+  }
+
+  .players .row.podium-winner {
+    animation: winner-pop var(--motion-enter) var(--ease-spring);
+  }
+
+  @keyframes winner-pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.045); }
+    70% { transform: scale(0.995); }
+    100% { transform: scale(1); }
+  }
+
+  /* Rank delta chip: pop in, hold, fade up and out. --motion-hold cycles
+   * the whole lifespan (≈2.4s); host.js re-hides the chip when it ends. */
+  .row-delta.row-delta-live {
+    animation: row-delta-pop var(--motion-hold) var(--ease-out) forwards;
+  }
+
+  @keyframes row-delta-pop {
+    0% {
+      opacity: 0;
+      transform: translateY(0.4em) scale(0.6);
+    }
+    10%,
+    72% {
+      opacity: 1;
+      transform: none;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-0.3em) scale(0.9);
+    }
+  }
 }
 
 .players li.me {
   border-color: var(--line-strong);
-  box-shadow: inset 0 0 0 1px var(--neon-soft);
+  box-shadow: inset 0 0 0 1px var(--primary-soft);
 }
 
 .row-rank {
   flex: 0 0 auto;
   min-width: 1.6em;
-  color: var(--gold);
+  color: var(--accent);
   font-weight: 800;
   font-size: 1.05em;
   font-variant-numeric: tabular-nums;
@@ -431,7 +548,7 @@ button.answer:disabled {
 
 .row-score {
   flex: 0 0 auto;
-  color: var(--neon);
+  color: var(--accent);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -456,7 +573,7 @@ button.answer:disabled {
   margin: 0 0 var(--sp-4);
   font-size: var(--fs-lg);
   font-weight: 800;
-  color: var(--neon);
+  color: var(--accent);
   overflow-wrap: anywhere;
 }
 
@@ -560,14 +677,14 @@ button.answer:focus-visible {
 .countdown {
   font-size: var(--fs-timer);
   font-weight: 800;
-  color: var(--gold);
+  color: var(--accent);
   margin: 0 0 var(--space-control); /* real gap to whatever follows (issue 01) */
   font-variant-numeric: tabular-nums;
-  text-shadow: var(--glow-gold);
+  text-shadow: var(--glow-accent);
 }
 
 .correct {
-  color: var(--neon);
+  color: var(--accent);
 }
 
 .wrong {
@@ -578,7 +695,7 @@ button.answer:focus-visible {
   font-size: var(--fs-xl);
   font-weight: 800;
   margin: 0;
-  color: var(--neon);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -634,7 +751,7 @@ button.answer:focus-visible {
 .score-big {
   font-size: var(--fs-md);
   font-weight: 800;
-  color: var(--neon);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -677,7 +794,7 @@ button.answer:focus-visible {
 
 .color-swatch.selected {
   border-color: var(--ink);
-  box-shadow: var(--glow-neon), inset 0 0 0 1px rgb(0 0 0 / 0.3);
+  box-shadow: var(--glow-accent), inset 0 0 0 1px rgb(0 0 0 / 0.3);
   transform: scale(1.08);
 }
 
@@ -727,8 +844,8 @@ button.answer:focus-visible {
 }
 
 .lang-toggle button.active {
-  background: var(--neon);
-  color: var(--neon-ink);
+  background: var(--primary);
+  color: var(--on-primary);
   font-weight: 800;
 }
 
