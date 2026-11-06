@@ -74,7 +74,8 @@
   /* Same card treatment as .card / .quiz-card (issue 01). */
   border-radius: var(--r-xl);
   padding: var(--space-card);
-  background: var(--surface-sunken);
+  /* Raised lilac on the white editor card (bright reskin). */
+  background: var(--surface-raised);
 }
 
 .question-card h3 {

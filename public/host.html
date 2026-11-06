@@ -65,12 +65,24 @@
       <ol id="question-options" class="answers"></ol>
       <p class="label" data-i18n="host.timeLeft">Time left</p>
       <p id="countdown" class="countdown"></p>
+      <!-- Timer progress bar: drains with the countdown (fed by host.js via
+           scaleX; aria-hidden because the digits above carry the value). -->
+      <div class="progress" aria-hidden="true">
+        <div id="timer-bar" class="progress-fill"></div>
+      </div>
       <button id="reveal" class="player-button" data-i18n="host.reveal">Reveal answer</button>
     </main>
 
     <main class="card" id="view-reveal" hidden>
       <h1 data-i18n="host.correctAnswer">Correct answer</h1>
       <p id="correct-answer" class="correct-answer"></p>
+      <!-- Answered meter (client-only): filled from the reveal payload's
+           per-player results (X of the roster answered; bar + count). -->
+      <p class="label" data-i18n="host.answered">Answered</p>
+      <div class="progress" aria-hidden="true">
+        <div id="answered-bar" class="progress-fill meter-answered"></div>
+      </div>
+      <p id="answered-count" class="meter-count" role="status"></p>
       <p class="label" data-i18n="host.answeredCorrectly">Answered correctly</p>
       <ul id="correct-players" class="players" data-i18n-attr="aria-label:host.answeredCorrectly"></ul>
       <button id="next" class="player-button" data-i18n="host.next">Next</button>

@@ -76,6 +76,8 @@
   border-radius: var(--r-md);
   background: var(--primary-soft);
   color: var(--ink);
+  /* Hard offset band — the banner is a chunky press surface too. */
+  box-shadow: 0 0.3rem 0 rgb(23 8 58 / 0.18);
   font-weight: 700;
   text-decoration: none;
   transition:
@@ -88,22 +90,25 @@
   border-color: var(--accent);
   filter: brightness(1.06);
   transform: translateY(-2px);
+  box-shadow: 0 0.4rem 0 rgb(23 8 58 / 0.18);
 }
 
 .live-banner:active {
-  transform: translateY(0);
+  transform: translateY(0.15rem);
+  box-shadow: 0 0.1rem 0 rgb(23 8 58 / 0.18);
   transition-timing-function: var(--ease-spring);
 }
 
-/* The "it's live" pulse: only runs when motion is welcome. */
+/* The "it's live" pulse: only runs when motion is welcome. Gold on the
+ * lilac wash reads unmistakably as "scheduled — jump in". */
 .live-banner::before {
   content: '';
   flex: 0 0 auto;
   width: 0.65rem;
   height: 0.65rem;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 0 rgb(128 117 255 / 0.5);
+  background: var(--medal-gold);
+  box-shadow: 0 0 0 0 rgb(255 212 0 / 0.5);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -114,10 +119,10 @@
   @keyframes live-pulse {
     0%,
     100% {
-      box-shadow: 0 0 0 0 rgb(128 117 255 / 0.45);
+      box-shadow: 0 0 0 0 rgb(255 212 0 / 0.45);
     }
     50% {
-      box-shadow: 0 0 0 7px rgb(128 117 255 / 0);
+      box-shadow: 0 0 0 7px rgb(255 212 0 / 0);
     }
   }
 }
@@ -179,7 +184,7 @@ html[dir='rtl'] .live-banner::after {
   padding: var(--space-card);
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  background: var(--surface-sunken);
+  background: var(--surface-raised);
   transition:
     transform var(--motion-fast) var(--ease-out),
     border-color var(--motion-fast) var(--ease-out),
@@ -224,14 +229,14 @@ html[dir='rtl'] .live-banner::after {
 }
 
 /* The question count as a tilted sticker chip — sparing (one per card).
- * Gold on night-purple, matching the Kahoot accent palette. */
+ * Gold with dark ink: the classic Kahoot sticker on the white card. */
 .quiz-card-count {
   display: inline-block;
   align-self: start;
   margin: 0 0 var(--sp-2);
   padding: var(--sp-1) var(--sp-3);
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--medal-gold);
+  color: var(--medal-gold-ink);
   font-size: var(--fs-xs);
   font-weight: 800;
   border-radius: var(--r-pill);

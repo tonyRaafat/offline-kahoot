@@ -49,6 +49,10 @@ const questionNumberEl = document.getElementById('question-number');
 const questionPromptEl = document.getElementById('question-prompt');
 const questionOptionsEl = document.getElementById('question-options');
 const countdownEl = document.getElementById('countdown');
+// Bright-reskin meters (transform-only, fed from the render paths below).
+const timerBarEl = document.getElementById('timer-bar');
+const answeredBarEl = document.getElementById('answered-bar');
+const answeredCountEl = document.getElementById('answered-count');
 const revealButton = document.getElementById('reveal');
 const nextButton = document.getElementById('next');
 const leaderboardNextButton = document.getElementById('leaderboard-next');
@@ -100,12 +104,16 @@ function stopCountdown() {
   countdownEl.textContent = '';
 }
 
-function startCountdown(timerDeadline) {
+function startCountdown(timerDeadline, timeSeconds = 0) {
   stopCountdown();
+  const totalMs = timeSeconds > 0 ? timeSeconds * 1000 : 0;
   const tick = () => {
-    countdownEl.textContent = String(
-      Math.max(0, Math.ceil((timerDeadline - Date.now()) / 1000)),
-    );
+    const remainingMs = Math.max(0, timerDeadline - Date.now());
+    countdownEl.textContent = String(Math.ceil(remainingMs / 1000));
+    // Timer progress bar drains with the question window (scaleX only).
+    if (timerBarEl !== null) {
+      timerBarEl.style.transform = `scaleX(${totalMs > 0 ? remainingMs / totalMs : 0})`;
+    }
   };
   tick();
   countdownTimer = setInterval(tick, 250);
@@ -206,15 +214,31 @@ function renderQuestion(view) {
       return li;
     }),
   );
-  startCountdown(question.timerDeadline);
+  startCountdown(question.timerDeadline, question.timeSeconds);
 }
 
 function renderReveal(view) {
   if (!revealData) return;
   show('reveal');
   nextButton.disabled = false;
+  // The correct answer becomes the big colored tile in its option color
+  // (bright-Kahoot reveal card); the attribute falls off gracefully when
+  // the last question view is unavailable (e.g. a resume into a reveal).
+  if (lastQuestion) {
+    correctAnswerEl.dataset.answerIndex = String(revealData.correctIndex);
+  } else {
+    correctAnswerEl.removeAttribute('data-answer-index');
+  }
   correctAnswerEl.textContent =
     lastQuestion?.options[revealData.correctIndex] ?? t('host.option', { number: revealData.correctIndex + 1 });
+  // Answered meter (client-only, decision A): the reveal payload lists every
+  // joined player; entries with a real answerIndex are the ones who answered.
+  if (answeredBarEl !== null && answeredCountEl !== null) {
+    const total = Math.max(view.players.length, 1);
+    const answered = revealData.results.filter((result) => result.answerIndex !== null).length;
+    answeredBarEl.style.transform = `scaleX(${answered / total})`;
+    answeredCountEl.textContent = `${answered} / ${view.players.length}`;
+  }
   const names = playersById(view);
   correctPlayersEl.replaceChildren(
     ...revealData.results

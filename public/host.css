@@ -2,6 +2,12 @@
  * editor). Built entirely on the tokens layer in tokens.css, which is loaded
  * before this file. Editor-specific additions live in editor.css.
  *
+ * Bright-Kahoot reskin: every phase screen is now one WHITE chunky rounded
+ * card (hard offset shadow) floating on the bright purple field; answers get
+ * the chunky tile treatment with a hard black press band; the podium is a
+ * real 2-1-3 column layout; the question card gains a timer progress bar and
+ * the reveal card an answered meter (both fed by host.js, transform-only).
+ *
  * RTL: mirroring falls out of dir="rtl" plus the logical properties used
  * throughout (inset-inline-end, margin-inline-end, text-align: start…);
  * the few hard overrides sit in the Arabic-only section at the bottom. */
@@ -38,8 +44,8 @@ body {
   font-size: var(--fs-base);
   line-height: var(--lh-body); /* issue 01: real line-height, not a spacing token */
   background:
-    radial-gradient(58rem 34rem at 24% -12%, var(--bg-glow), transparent 62%),
-    radial-gradient(48rem 30rem at 108% 118%, rgb(128 117 255 / 0.07), transparent 55%),
+    radial-gradient(58rem 34rem at 24% -12%, rgb(255 255 255 / 0.07), transparent 62%),
+    radial-gradient(48rem 30rem at 108% 118%, var(--bg-glow), transparent 55%),
     var(--bg);
   color: var(--ink);
 }
@@ -121,16 +127,20 @@ body {
   color: var(--ink);
 }
 
-/* ---------- Unboxed full-bleed content containers ----------
- * The bordered/centered phase card is gone (ui-redesign): .card is now a
- * plain full-width content column, and page structure comes from internal
- * components (panels, rows, lists) plus the shared body gutter. */
+/* ---------- Cards: white chunky phase screens (bright-Kahoot reskin) ----------
+ * The full-bleed flow stays (content column + body gutter), but the column
+ * itself is now a white rounded card with the hard-offset card shadow —
+ * every phase screen reads as one chunky Kahoot panel on the purple field. */
 .card {
   width: 100%;
+  padding: clamp(var(--sp-4), 1rem + 2vw, var(--sp-6));
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 /* The player join form is the phone-first column of its page: a readable
- * internal measure, no box. Phase screens above it stay genuinely full-bleed. */
+ * internal measure. Phase screens above it stay genuinely full-bleed. */
 #entering {
   max-width: 36rem;
 }
@@ -216,8 +226,8 @@ h1 {
   font-weight: 800;
   letter-spacing: 0.28em;
   margin-inline-start: 0.28em; /* optically center the tracked digits */
-  color: var(--accent);
-  text-shadow: 0 0 26px rgb(128 117 255 / 0.35);
+  color: var(--primary);
+  text-shadow: 0 0.18rem 0 rgb(23 8 58 / 0.28); /* chunky digit press feel */
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -279,13 +289,12 @@ h1 {
   cursor: pointer;
   /* Kahoot "big button" feel: a hard shadow band reads as a physical press
    * surface; hover lifts, press flattens into it (issue 05). */
-  box-shadow: 0 0.3rem 0 rgb(0 0 0 / 0.22);
+  box-shadow: 0 0.3rem 0 var(--btn-band);
 }
 
-/* Hover goes to --accent (the secondary): the CTA visibly brightens
- * instead of leaning on a brightness filter alone. */
+/* Hover lifts onto the lighter purple surface — never a brightness filter. */
 .player-button:hover:enabled {
-  background: var(--accent);
+  background: var(--primary-hover);
   transform: translateY(-2px);
 }
 
@@ -309,6 +318,7 @@ button.answer:disabled {
 .player-button.danger {
   background: var(--rose);
   color: var(--rose-ink);
+  box-shadow: 0 0.3rem 0 var(--rose-band);
 }
 
 /* Secondary actions (Edit cards, Rename/Back buttons): raised but not neon. */
@@ -316,6 +326,7 @@ button.answer:disabled {
   background: var(--surface-raised);
   color: var(--ink);
   border: 1px solid var(--line-strong);
+  box-shadow: 0 0.3rem 0 rgb(23 8 58 / 0.12);
 }
 
 .player-button.secondary:hover:enabled {
@@ -355,9 +366,8 @@ button.answer:disabled {
 
 .panel {
   padding: clamp(var(--sp-4), 2.5vw, var(--sp-5));
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--surface-sunken);
+  background: var(--surface-raised);
   text-align: center;
 }
 
@@ -365,7 +375,7 @@ button.answer:disabled {
   color: var(--accent);
   font-size: var(--fs-md);
   font-weight: 700;
-  text-decoration-color: rgb(128 117 255 / 0.45);
+  text-decoration-color: rgb(99 32 238 / 0.45);
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
   overflow-wrap: anywhere;
@@ -400,7 +410,7 @@ button.answer:disabled {
   padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background: var(--surface);
+  background: var(--surface-raised);
   color: var(--ink);
   font-size: var(--fs-md);
   font-weight: 600;
@@ -458,10 +468,135 @@ button.answer:disabled {
 .row-delta[data-dir='up'] { color: var(--gain); }
 .row-delta[data-dir='down'] { color: var(--rose); }
 
-/* Winner row accent: gold border + soft glow (the pop comes further down). */
+/* Winner row accent: gold border + soft glow (the pop comes further down).
+ * The podium column layout below overrides the border for its bars. */
 .players .row.podium-winner {
   border-color: var(--medal-gold);
   box-shadow: 0 0 18px rgb(255 212 0 / 0.16), inset 0 0 0 1px rgb(255 212 0 / 0.3);
+}
+
+/* ---------- Podium columns (bright-Kahoot reskin) ----------
+ * The suspense machinery (ux-04) still drives the same .row skeletons keyed
+ * by playerId — only the LIST presentation changes: the top-3 render as the
+ * classic 2-1-3 vertical columns, each column a colored block whose height
+ * matches the rank. Pure CSS on the existing DOM (nth-child + order), so
+ * rows keep their ids/data-player-id and the reveal classes keep working. */
+#podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding-block: var(--sp-4) 0;
+  text-align: center;
+}
+
+#podium .row {
+  flex: 1 1 0;
+  max-width: 12rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: none;
+  background: none;
+}
+
+/* The colored column block: content stacks ABOVE its rank-height pillar. */
+#podium .row::after {
+  content: '';
+  display: block;
+  order: 2;
+  align-self: stretch;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  box-shadow: 0 0.4rem 0 rgb(23 8 58 / 0.3); /* the hard offset band */
+}
+
+#podium .row:nth-child(1) { order: 2; }  /* 1st, center */
+#podium .row:nth-child(1)::after {
+  height: clamp(4.5rem, 3.2rem + 5vw, 10rem);
+  background: var(--medal-gold);
+}
+
+#podium .row:nth-child(2) { order: 1; }  /* 2nd, left */
+#podium .row:nth-child(2)::after {
+  height: clamp(3rem, 2.2rem + 3.6vw, 7rem);
+  background: var(--medal-silver);
+}
+
+#podium .row:nth-child(3) { order: 3; }  /* 3rd, right */
+#podium .row:nth-child(3)::after {
+  height: clamp(2.25rem, 1.6rem + 2.6vw, 5.25rem);
+  background: var(--medal-bronze);
+}
+
+/* Suspense skeleton keeps an honest dashed placeholder pillar. */
+#podium .row.podium-slot::after {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-raised) 0 0.6rem,
+    var(--surface-sunken) 0.6rem 1.2rem
+  );
+}
+
+/* Winner's pillar gets the gold ring instead of the row border above. */
+#podium .row.podium-winner {
+  border-color: transparent;
+  box-shadow: none;
+}
+#podium .row.podium-winner::after {
+  box-shadow:
+    0 0.4rem 0 rgb(23 8 58 / 0.3),
+    inset 0 0 0 3px rgb(255 255 255 / 0.7);
+}
+
+@media (max-width: 480px) {
+  #podium {
+    gap: var(--sp-2);
+  }
+}
+
+/* ---------- Meters: timer progress + answered count ----------
+ * Simple transform-driven bars (host.js sets scaleX per tick/render —
+ * transform-only, information-bearing, reduced-motion safe). Anchor side
+ * follows the writing direction through the RTL override below. */
+.progress {
+  width: 100%;
+  height: 0.65rem;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+  margin: var(--sp-2) 0;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--primary));
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+/* The answered meter reads green (the "correct" mood of a reveal card). */
+.progress-fill.meter-answered {
+  background: var(--gain);
+}
+
+.meter-count {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+html[dir='rtl'] .progress-fill {
+  transform-origin: right; /* meters deplete from the reading end */
 }
 
 /* Podium skeleton slot while the suspense hasn't revealed a rank yet:
@@ -577,6 +712,23 @@ button.answer:disabled {
   overflow-wrap: anywhere;
 }
 
+/* Big colored answer card on the host reveal (bright-Kahoot reskin): the
+ * correct answer renders as one huge tile in its option color — host.js
+ * sets data-answer-index from the last shown question; the attribute is
+ * absent as a graceful fallback (e.g. a resume straight into a reveal). */
+.correct-answer[data-answer-index] {
+  padding: var(--sp-5) var(--sp-4);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-lg);
+  text-align: center;
+  box-shadow: 0 0.4rem 0 rgb(0 0 0 / 0.3);
+}
+
+.correct-answer[data-answer-index='0'] { background: var(--answer-0); color: var(--answer-0-ink); }
+.correct-answer[data-answer-index='1'] { background: var(--answer-1); color: var(--answer-1-ink); }
+.correct-answer[data-answer-index='2'] { background: var(--answer-2); color: var(--answer-2-ink); }
+.correct-answer[data-answer-index='3'] { background: var(--answer-3); color: var(--answer-3-ink); }
+
 /* Empty states (no players / no quizzes) */
 .empty {
   margin: var(--sp-2) 0;
@@ -613,10 +765,12 @@ button.answer:disabled {
   align-items: center;
   min-height: var(--control-h);
   padding: var(--sp-3);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   font-weight: 800;
   font-size: var(--fs-md);
   overflow-wrap: anywhere;
+  /* Chunky Kahoot tile: a crisp unblurred black band under the color. */
+  box-shadow: 0 0.35rem 0 rgb(0 0 0 / 0.28);
 }
 
 .answers li[data-answer-index='0'],
@@ -649,11 +803,12 @@ button.answer {
   min-height: var(--control-h);
   font-weight: 800;
   border: none;
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: var(--sp-3);
   text-align: start;
   font-size: var(--fs-md);
   cursor: pointer;
+  box-shadow: 0 0.35rem 0 rgb(0 0 0 / 0.28);
   transition:
     filter var(--motion-fast) var(--ease-out),
     transform var(--motion-fast) var(--ease-out);
@@ -661,14 +816,19 @@ button.answer {
 
 button.answer:hover:enabled {
   filter: brightness(1.12);
+  transform: translateY(-2px);
 }
 
 button.answer:active:enabled {
-  transform: scale(0.98);
+  /* Press flattens into the hard band — the physical Kahoot tap feel. */
+  transform: translateY(0.15rem);
+  box-shadow: 0 0.1rem 0 rgb(0 0 0 / 0.28);
+  transition-timing-function: var(--ease-spring);
 }
 
 /* Same ring geometry as the global focus; ink instead of neon for contrast
  * on the saturated answer palette. */
+/* (unchanged in the bright reskin) */
 button.answer:focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
@@ -677,10 +837,10 @@ button.answer:focus-visible {
 .countdown {
   font-size: var(--fs-timer);
   font-weight: 800;
-  color: var(--accent);
+  color: var(--primary);
   margin: 0 0 var(--space-control); /* real gap to whatever follows (issue 01) */
   font-variant-numeric: tabular-nums;
-  text-shadow: var(--glow-accent);
+  text-shadow: 0 0.18rem 0 rgb(23 8 58 / 0.28);
 }
 
 .correct {
@@ -700,14 +860,15 @@ button.answer:focus-visible {
 }
 
 /* ---------- Error lists (login + editor; issue 01) ----------
- * One shared presentation: a quiet rose box for validation messages. */
+ * One shared presentation: a quiet rose box for validation messages — the
+ * bright-reskin light variant (soft pink fill, deep rose text). */
 .errors {
   list-style: none;
   margin: var(--sp-3) 0 0;
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-sm);
-  background: var(--rose-ink);
-  color: var(--rose);
+  background: var(--rose-soft);
+  color: var(--rose-deep);
   font-size: var(--fs-sm);
 }
 

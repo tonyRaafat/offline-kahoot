@@ -1,11 +1,13 @@
 /* tokens.css — the design-token layer, loaded before every page stylesheet.
  * Everything else references these via var(--…); no one-off magic values.
  * Also owns the full-width brand bar (html::before) shown on every page.
- * Palette (ui-redesign): deep warm plum-black surfaces (#211a1d) with an
- * electric-indigo/medium-slate-blue accent pair — --primary for solid
- * action surfaces, --accent for hover states and accent-on-dark text.
- * The Kahoot answer colors stay untouched (they are semantic, owned by
- * avatar.js / src/avatar-colors.ts).
+ * Palette (bright-Kahoot reskin): the classic bright Kahoot purple field
+ * (#46178f) behind WHITE chunky rounded cards — surfaces, ink, lines and
+ * shadows all retargeted for light; buttons keep hard offset "press band"
+ * shadows (--*-band tokens). No names renamed: every token below keeps the
+ * same semantic role it had in the dark theme, so host.js/player.js and the
+ * FLIP machinery are untouched. The Kahoot answer colors stay untouched
+ * (they are semantic, owned by avatar.js / src/avatar-colors.ts).
  *
  * Issue-04 contract: motion tokens (--motion-*, --ease-*) are what the
  * FLIP/count-up animations must consume, so the reduced-motion block below
@@ -78,29 +80,36 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* ---- Color ---- */
-  --bg: #211a1d;                      /* app backdrop, deep warm plum-black */
-  --bg-glow: #2f2138;                 /* ambient glow layer (indigo-tinted) */
-  --surface: #2b2126;                 /* inner surfaces, row cards */
-  --surface-raised: #3a2c33;          /* hover / raised rows */
-  --surface-sunken: #1a1417;          /* inputs, inner panels, answer base */
-  --line: #443540;                    /* hairline borders */
-  --line-strong: #6d5a75;             /* hovered / focused borders */
+  --bg: #46178f;                      /* app backdrop, the bright Kahoot purple */
+  --bg-glow: #380e70;                 /* ambient glow layer (deeper purple) */
+  --surface: #ffffff;                 /* card surfaces (the white "page" layer) */
+  --surface-raised: #f6f1fc;          /* rows / secondary cards on a white card */
+  --surface-sunken: #efe8fa;          /* inputs, inner panels */
+  --line: #e0d4f4;                    /* hairline borders on white */
+  --line-strong: #c4aee6;             /* hovered / focused borders */
 
-  --ink: #f8f0fb;                     /* text on dark */
-  --ink-muted: #cad5ca;               /* secondary text */
-  --ink-faint: #9aa99d;               /* faintest text (labels, placeholders) */
+  --ink: #2b1846;                     /* text on white */
+  --ink-muted: #5d5178;               /* secondary text */
+  --ink-faint: #9389ae;               /* faintest text (labels, placeholders) */
 
-  --primary: #6320ee;                 /* primary action (buttons/CTAs) */
-  --accent: #8075ff;                  /* hover state + accent text/icons on dark */
-  --on-primary: #f8f0fb;              /* text on primary */
-  --primary-soft: #6320ee24;          /* primary tint wash */
-  --accent-ink: #211a1d;              /* dark text on accent chips */
+  --primary: #46178f;                 /* primary action (buttons/CTAs) */
+  --accent: #6320ee;                  /* accent text/icons, focus rings on white */
+  --on-primary: #ffffff;              /* text on primary */
+  --primary-soft: #46178f1f;          /* primary tint wash */
+  --accent-ink: #1d1145;              /* dark text on accent/gold chips */
+  /* Bright-reskin additions (additive): the hard press-band colors + light
+   * error-box pair. No consumer outside these sheets needs to know them. */
+  --primary-hover: #5a21b4;           /* .player-button hover surface */
+  --btn-band: #2c0b5e;                /* hard offset band under primary buttons */
+  --rose-band: #9e0f2a;               /* hard offset band under danger buttons */
+  --rose-soft: #fbe9ef;               /* light error-box fill */
+  --rose-deep: #b3204a;               /* readable rose text on the light fill */
 
-  --rose: #ff6b81;                    /* danger / wrong */
-  --rose-ink: #401313;
+  --rose: #e21b3c;                    /* danger / wrong (solid surfaces) */
+  --rose-ink: #ffffff;
 
   /* Kahoot answer palette (keys owned by public/avatar.js + src/avatar-colors.ts) */
   --answer-0: #e21b3c;                /* red */
@@ -144,8 +153,13 @@
   --r-xl: 1.75rem;
   --r-pill: 999px;
 
-  /* ---- Typography (system faces only: the game must run offline) ---- */
-  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ---- Typography (offline, self-hosted only — no CDN) ----
+   * Bright-Kahoot reskin: bold Montserrat THROUGHOUT — body text rides the
+   * self-hosted 400 weight, headings display 700/800 via --font-display.
+   * The @font-face subsets cover Latin/Latin-ext; Arabic falls through the
+   * stack per-glyph to the system Arabic-capable faces (recorded issue-05
+   * decision — nothing extra shipped, nothing broken). */
+  --font-body: "Montserrat", "Segoe UI", system-ui, sans-serif;
   /* Kahoot display face (issue 05): self-hosted Montserrat for Latin headers,
    * big PIN digits and sticker labels. Arabic falls through per-glyph to the
    * system stack recorded above; no language switch to a lesser face. */
@@ -165,9 +179,11 @@
   --fs-timer: clamp(2.8rem, 2.3rem + 2.8vw, 4.6rem);   /* countdown */
 
   /* ---- Elevation ---- */
-  --shadow-card: 0 12px 40px rgb(0 0 0 / 0.38), 0 2px 6px rgb(0 0 0 / 0.22);
-  --shadow-pop: 0 18px 48px rgb(0 0 0 / 0.45);
-  --glow-accent: 0 0 0 1px rgb(128 117 255 / 0.45), 0 0 24px rgb(128 117 255 / 0.28);
+  /* Hard offset shadows: a crisp, unblurred band below the card — chunkier
+   * and flatter than the old soft dark-theme glow stack. */
+  --shadow-card: 0 0.4rem 0 rgb(23 8 58 / 0.35);
+  --shadow-pop: 0 0.65rem 0 rgb(23 8 58 / 0.4);
+  --glow-accent: 0 0 0 1px rgb(99 32 238 / 0.5), 0 0 0 5px rgb(99 32 238 / 0.12);
 
   /* ---- Z-index scale ---- */
   --z-raised: 10;      /* in-page pop, e.g. selected swatch outline parity */
@@ -210,7 +226,15 @@ html::before {
   inset: 0 0 auto;
   height: 4px;
   z-index: calc(var(--z-toggle) + 1); /* stays above the language toggle layer */
-  background: linear-gradient(90deg, var(--primary), var(--accent));
+  /* The answer-color braid: red/blue/yellow/green strips — the Kahoot quiz
+   * tiles become the brand bar so every page carries the gameplay palette. */
+  background: linear-gradient(
+    90deg,
+    var(--answer-0) 0 25%,
+    var(--answer-1) 25% 50%,
+    var(--answer-2) 50% 75%,
+    var(--answer-3) 75% 100%
+  );
   pointer-events: none;
 }
 
@@ -261,12 +285,12 @@ html::before {
  * scene just alive without stealing attention from the game. */
 .bg-kahoot::before {
   background:
-    radial-gradient(52rem 30rem at 24% 30%, rgb(99 32 238 / 0.2), transparent 65%),
-    radial-gradient(46rem 28rem at 82% 74%, rgb(99 32 238 / 0.22), transparent 60%),
-    radial-gradient(20rem 14rem at 70% 12%, rgb(128 117 255 / 0.05), transparent 70%),
+    radial-gradient(52rem 30rem at 24% 30%, rgb(255 255 255 / 0.09), transparent 65%),
+    radial-gradient(46rem 28rem at 82% 74%, rgb(56 14 112 / 0.5), transparent 60%),
+    radial-gradient(20rem 14rem at 70% 12%, rgb(255 255 255 / 0.05), transparent 70%),
     repeating-conic-gradient(
       from 0deg,
-      rgb(255 255 255 / 0.016) 0deg 90deg,
+      rgb(255 255 255 / 0.045) 0deg 90deg,
       transparent 90deg 180deg
     );
   background-size: auto, auto, auto, 22rem 22rem;
@@ -294,14 +318,14 @@ html::before {
 .bg-kahoot::after {
   background:
     /* tilted square frame, upper left */
-    linear-gradient(var(--bg-glow), var(--bg-glow)),
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)),
     /* triangle wedge, mid right */
-    conic-gradient(from 140deg at 50% 100%, rgb(99 32 238 / 0.16) 0 40deg, transparent 40deg),
+    conic-gradient(from 140deg at 50% 100%, rgb(255 255 255 / 0.12) 0 40deg, transparent 40deg),
     /* tilted square frame, lower right */
-    linear-gradient(var(--line) , var(--line)),
-    /* confetti: accent dot, bone dot */
-    radial-gradient(circle at 50% 50%, var(--accent) 0 42%, transparent 46%),
-    radial-gradient(circle at 50% 50%, var(--ink-faint) 0 34%, transparent 38%);
+    linear-gradient(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.28)),
+    /* confetti: gold dot, white dot */
+    radial-gradient(circle at 50% 50%, var(--medal-gold) 0 42%, transparent 46%),
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.8) 0 34%, transparent 38%);
   background-size:
     7.5rem 7.5rem,
     9rem 7rem,
@@ -315,7 +339,7 @@ html::before {
     12% 70%,
     64% 22%;
   background-repeat: no-repeat;
-  opacity: 0.24;
+  opacity: 0.4;
   transform: rotate(6deg);
 }
 
