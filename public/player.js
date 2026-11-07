@@ -256,6 +256,20 @@ function renderResult() {
 function renderStandings(view, name) {
   show(name);
   const rank = view.leaderboard.indexOf(myId);
+  // Podium: the host click-reveals ranks one step at a time and every client
+  // receives the same podiumRevealed progress in StateView. Before a player's
+  // own rank step is up they stay in the no-results state (waiting copy, no
+  // rank, no score): top-3 players wait for their own reveal; players ranked
+  // 4+ wait for the final reveal (1st place) — no early leaks either way.
+  const locked = name === 'podium' && standingsLocked(view, rank);
+  if (locked) {
+    set(rankEls[name], 'player.rankWaiting');
+    const mine = view.players.find((player) => player.id === myId);
+    scoreEls[name].replaceChildren(
+      makeAvatar(mine?.name ?? '', mine?.color ?? myColor ?? 'grey'),
+    );
+    return;
+  }
   if (rank >= 0) {
     set(rankEls[name], 'player.rank', { rank: rank + 1, total: view.leaderboard.length });
   } else {
@@ -269,6 +283,21 @@ function renderStandings(view, name) {
     makeAvatar(mine?.name ?? '', mine?.color ?? myColor ?? 'grey'),
     score,
   );
+}
+
+/** Has this player's podium result been revealed yet by the synced step?
+ *  Reveal order is lowest-rank-first: rank r (1-based) in the top `slots`
+ *  appears on step (slots - r + 1); ranks outside the podium appear only on
+ *  the final step (1st place up). A missing podiumRevealed (older server)
+ *  locks the podium card at the safe no-results state; the leaderboard
+ *  phase is untouched. */
+function standingsLocked(view, rank) {
+  const slots = Math.min(3, view.leaderboard.length);
+  const revealed = Math.max(0, Math.min(view.podiumRevealed ?? 0, slots));
+  if (rank >= 0 && rank < slots) {
+    return revealed < slots - rank; // e.g. rank 1 (2nd place) reveals on step 2
+  }
+  return revealed < slots; // outside the podium: wait for 1st place
 }
 
 // Join-error reason keys come straight from the server (src/join.ts);

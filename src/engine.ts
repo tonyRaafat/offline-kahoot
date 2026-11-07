@@ -63,6 +63,11 @@ export interface GameState {
   firstCorrectAtMs: Record<string, number>;
   /** Player ids ordered score desc, then earliest correct answer, then id asc; set on entering leaderboard/podium. */
   leaderboard: string[];
+  /** Podium click-reveal progress: how many ranks (lowest-first: 3rd -> 2nd
+   *  -> 1st) have been revealed, capped at min(3, leaderboard.length). Only
+   *  advances via `podiumReveal` during the podium phase; reset whenever the
+   *  game (re)enters the podium, on `end`, and on `startQuiz`. */
+  podiumRevealed: number;
 }
 
 export type Event =
@@ -72,6 +77,8 @@ export type Event =
   | { type: 'playerAnswer'; playerId: string; answerIndex: number; atMs: number }
   | { type: 'reveal' }
   | { type: 'next'; atMs: number }
+  /** Host click step for the podium ceremony: reveals the next rank. */
+  | { type: 'podiumReveal' }
   | { type: 'end' };
 
 export type AnswerRejectReason =
@@ -116,6 +123,7 @@ export function createInitialGame(quiz: Quiz): GameState {
     answers: {},
     firstCorrectAtMs: {},
     leaderboard: [],
+    podiumRevealed: 0,
   };
 }
 
@@ -178,6 +186,7 @@ export function reduce(
         timerDeadline: event.atMs + question.timeSeconds * 1000,
         answers: {},
         leaderboard: [],
+        podiumRevealed: 0,
       };
       return { state: next, effects: [{ type: 'broadcastState', state: next }] };
     }
@@ -281,6 +290,9 @@ export function reduce(
             ...state,
             phase: 'podium',
             leaderboard: buildLeaderboard(state),
+            // A fresh podium starts fully blank: the host click-reveals the
+            // ranks three -> two -> one from here (client sided sync only).
+            podiumRevealed: 0,
           };
           return {
             state: next,
@@ -301,6 +313,18 @@ export function reduce(
       return { state, effects: [] };
     }
 
+    case 'podiumReveal': {
+      // Podium ceremony step: reveal the next rank (lowest-first). Silently
+      // ignored outside the podium phase and once fully revealed (capped at
+      // the podium size, min(3, leaderboard.length)) — later clicks are no-ops
+      // exactly like the other guarded host events.
+      if (state.phase !== 'podium') return { state, effects: [] };
+      const cap = Math.min(3, state.leaderboard.length);
+      if (state.podiumRevealed >= cap) return { state, effects: [] };
+      const next: GameState = { ...state, podiumRevealed: state.podiumRevealed + 1 };
+      return { state: next, effects: [{ type: 'broadcastState', state: next }] };
+    }
+
     case 'end': {
       if (state.phase === 'lobby') return { state, effects: [] };
       const next: GameState = {
@@ -312,6 +336,7 @@ export function reduce(
         answers: {},
         firstCorrectAtMs: {},
         leaderboard: [],
+        podiumRevealed: 0,
       };
       return { state: next, effects: [{ type: 'broadcastState', state: next }] };
     }

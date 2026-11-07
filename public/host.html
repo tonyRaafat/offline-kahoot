@@ -110,7 +110,9 @@
     <main class="card card-stage" id="view-podium" hidden>
       <h1 data-i18n="host.podium">🏆 Podium</h1>
       <ol id="podium" class="players" data-i18n-attr="aria-label:host.podium"></ol>
-      <button id="end-game" class="player-button" data-i18n="host.backToLobby">
+      <!-- Click-reveal: hidden/disabled until 1st place is up (host.js
+           renderPodium unlocks it once the synced step is complete). -->
+      <button id="end-game" class="player-button" data-i18n="host.backToLobby" hidden>
         Back to dashboard
       </button>
     </main>

@@ -77,6 +77,7 @@ describe('createInitialGame', () => {
       answers: {},
       firstCorrectAtMs: {},
       leaderboard: [],
+      podiumRevealed: 0,
     });
   });
 });
@@ -627,13 +628,129 @@ describe('next, leaderboard, podium', () => {
   });
 
   it('ignores next outside reveal/leaderboard phases', () => {
-    const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    const state = start(lobbyWith(QUIZ, [['p1', 'Alexander']]));
     const { state: after, effects } = reduce(state, {
       type: 'next',
       atMs: START_AT,
     });
     expect(after).toEqual(state);
     expect(effects).toEqual([]);
+  });
+});
+
+describe('podiumReveal', () => {
+  /** Drives the deterministic path to the podium: every roster player
+   *  answers the single QUICK_MATHS question correctly (auto-reveal on the
+   *  last answer), then two `next` hops finish at the podium. */
+  function toPodium(roster: Array<[playerId: string, name: string]>): GameState {
+    let state = start(lobbyWith(QUICK_MATHS, roster));
+    for (const [playerId] of roster) {
+      state = reduce(state, {
+        type: 'playerAnswer',
+        playerId,
+        answerIndex: QUICK_MATHS.questions[0]!.correctIndex,
+        atMs: 1_002_000,
+      }).state;
+    }
+    expect(state.phase).toBe('reveal');
+    state = reduce(state, { type: 'next', atMs: 1_003_000 }).state; // -> leaderboard
+    state = reduce(state, { type: 'next', atMs: 1_003_500 }).state; // -> podium
+    expect(state.phase).toBe('podium');
+    return state;
+  }
+
+  it('enters the podium fully blank (podiumRevealed 0)', () => {
+    const podium = toPodium([
+      ['p1', 'Alice'],
+      ['p2', 'Bob'],
+      ['p3', 'Cara'],
+    ]);
+    expect(podium.podiumRevealed).toBe(0);
+  });
+
+  it('reveals one rank per click, lowest-first, broadcasting every step', () => {
+    let state = toPodium([
+      ['p1', 'Alice'],
+      ['p2', 'Bob'],
+      ['p3', 'Cara'],
+    ]);
+    for (const expected of [1, 2, 3]) {
+      const { state: after, effects } = reduce(state, { type: 'podiumReveal' });
+      expect(after.podiumRevealed).toBe(expected);
+      expect(after.phase).toBe('podium');
+      expect(effects).toEqual([{ type: 'broadcastState', state: after }]);
+      state = after;
+    }
+  });
+
+  it('caps at the podium size: clicks past the final reveal are exact no-ops', () => {
+    let state = toPodium([
+      ['p1', 'Alice'],
+      ['p2', 'Bob'],
+      ['p3', 'Cara'],
+    ]);
+    for (let i = 0; i < 3; i++) state = reduce(state, { type: 'podiumReveal' }).state;
+    const { state: after, effects } = reduce(state, { type: 'podiumReveal' });
+    expect(after).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  it('caps at min(3, leaderboard length): a 2-player podium fully reveals on step 2', () => {
+    let state = toPodium([
+      ['p1', 'Alice'],
+      ['p2', 'Bob'],
+    ]);
+    state = reduce(state, { type: 'podiumReveal' }).state; // click 1: 2nd place
+    expect(state.podiumRevealed).toBe(1);
+    state = reduce(state, { type: 'podiumReveal' }).state; // click 2: 1st place
+    expect(state.podiumRevealed).toBe(2);
+    const { effects } = reduce(state, { type: 'podiumReveal' });
+    expect(effects).toEqual([]);
+  });
+
+  it('caps at 3 even with a longer roster (never reveals rank 4+)', () => {
+    let state = toPodium([
+      ['p1', 'Alice'],
+      ['p2', 'Bob'],
+      ['p3', 'Cara'],
+      ['p4', 'Dana'],
+      ['p5', 'Eli'],
+    ]);
+    for (let i = 1; i <= 3; i++) {
+      state = reduce(state, { type: 'podiumReveal' }).state;
+      expect(state.podiumRevealed).toBe(i);
+    }
+    const { state: after, effects } = reduce(state, { type: 'podiumReveal' });
+    expect(after).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  it('is a no-op outside the podium phase (lobby, question)', () => {
+    const lobby = lobbyWith(QUICK_MATHS, [['p1', 'Alice']]);
+    expect(reduce(lobby, { type: 'podiumReveal' })).toEqual({ state: lobby, effects: [] });
+    const question = start(lobby);
+    expect(reduce(question, { type: 'podiumReveal' })).toEqual({
+      state: question,
+      effects: [],
+    });
+  });
+
+  it('is reset by end (clean lobby) and startQuiz (new game)', () => {
+    let state = toPodium([
+      ['p1', 'Alice'],
+      ['p2', 'Bob'],
+    ]);
+    state = reduce(state, { type: 'podiumReveal' }).state;
+    state = reduce(state, { type: 'podiumReveal' }).state;
+    state = reduce(state, { type: 'podiumReveal' }).state;
+    expect(state.podiumRevealed).toBe(2);
+
+    const lobby = reduce(state, { type: 'end' }).state;
+    expect(lobby.podiumRevealed).toBe(0);
+
+    state = reduce(lobby, { type: 'playerJoin', playerId: 'p3', name: 'Cara', color: 'red', atMs: 2_000 }).state;
+    const question = reduce(state, { type: 'startQuiz', atMs: 2_500 }).state;
+    expect(question.podiumRevealed).toBe(0);
   });
 });
 

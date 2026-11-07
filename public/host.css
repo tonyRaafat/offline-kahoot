@@ -475,13 +475,18 @@ button.answer:disabled {
   box-shadow: 0 0 18px rgb(255 212 0 / 0.16), inset 0 0 0 1px rgb(255 212 0 / 0.3);
 }
 
-/* ---------- Podium columns (bright-Kahoot reskin) ----------
- * The suspense machinery (ux-04) still drives the same .row skeletons keyed
- * by playerId — only the LIST presentation changes: the top-3 render as the
+/* ---------- Podium columns (bright-Kahoot reskin; HOST BIG STAGE ONLY) ----------
+ * The click-reveal machinery still drives the same .row skeletons keyed by
+ * playerId — only the LIST presentation changes: the top-3 render as the
  * classic 2-1-3 vertical columns, each column a colored block whose height
  * matches the rank. Pure CSS on the existing DOM (nth-child + order), so
- * rows keep their ids/data-player-id and the reveal classes keep working. */
-#podium {
+ * rows keep their ids/data-player-id and the reveal classes keep working.
+ *
+ * SCOPED UNDER #view-podium (the host card id): player.html's own Game-over
+ * card is also id="podium", and host.css ships on that page too — without the
+ * host-card scoping these flex/pillar rules hijacked the PLAYER's podium
+ * card on phones (row-flexed copy, bottom-aligned, words broken mid-word). */
+#view-podium #podium {
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -490,7 +495,7 @@ button.answer:disabled {
   text-align: center;
 }
 
-#podium .row {
+#view-podium #podium .row {
   flex: 1 1 0;
   max-width: 12rem;
   min-width: 0;
@@ -505,7 +510,7 @@ button.answer:disabled {
 }
 
 /* The colored column block: content stacks ABOVE its rank-height pillar. */
-#podium .row::after {
+#view-podium #podium .row::after {
   content: '';
   display: block;
   order: 2;
@@ -514,26 +519,26 @@ button.answer:disabled {
   box-shadow: 0 0.4rem 0 rgb(23 8 58 / 0.3); /* the hard offset band */
 }
 
-#podium .row:nth-child(1) { order: 2; }  /* 1st, center */
-#podium .row:nth-child(1)::after {
+#view-podium #podium .row:nth-child(1) { order: 2; }  /* 1st, center */
+#view-podium #podium .row:nth-child(1)::after {
   height: clamp(4.5rem, 3.2rem + 5vw, 10rem);
   background: var(--medal-gold);
 }
 
-#podium .row:nth-child(2) { order: 1; }  /* 2nd, left */
-#podium .row:nth-child(2)::after {
+#view-podium #podium .row:nth-child(2) { order: 1; }  /* 2nd, left */
+#view-podium #podium .row:nth-child(2)::after {
   height: clamp(3rem, 2.2rem + 3.6vw, 7rem);
   background: var(--medal-silver);
 }
 
-#podium .row:nth-child(3) { order: 3; }  /* 3rd, right */
-#podium .row:nth-child(3)::after {
+#view-podium #podium .row:nth-child(3) { order: 3; }  /* 3rd, right */
+#view-podium #podium .row:nth-child(3)::after {
   height: clamp(2.25rem, 1.6rem + 2.6vw, 5.25rem);
   background: var(--medal-bronze);
 }
 
-/* Suspense skeleton keeps an honest dashed placeholder pillar. */
-#podium .row.podium-slot::after {
+/* Masked slot keeps an honest dashed placeholder pillar. */
+#view-podium #podium .row.podium-slot::after {
   background: repeating-linear-gradient(
     45deg,
     var(--surface-raised) 0 0.6rem,
@@ -542,18 +547,18 @@ button.answer:disabled {
 }
 
 /* Winner's pillar gets the gold ring instead of the row border above. */
-#podium .row.podium-winner {
+#view-podium #podium .row.podium-winner {
   border-color: transparent;
   box-shadow: none;
 }
-#podium .row.podium-winner::after {
+#view-podium #podium .row.podium-winner::after {
   box-shadow:
     0 0.4rem 0 rgb(23 8 58 / 0.3),
     inset 0 0 0 3px rgb(255 255 255 / 0.7);
 }
 
 @media (max-width: 480px) {
-  #podium {
+  #view-podium #podium {
     gap: var(--sp-2);
   }
 }
@@ -599,7 +604,7 @@ html[dir='rtl'] .progress-fill {
   transform-origin: right; /* meters deplete from the reading end */
 }
 
-/* Podium skeleton slot while the suspense hasn't revealed a rank yet:
+/* Podium skeleton slot while the click-reveal hasn't unmasked a rank yet:
  * honest dashed placeholder, geometry identical to a filled row so each
  * reveal is an unmask (never a layout shift). The pre-filled content is
  * hidden with visibility so the rank/score colors can't leak through. */
@@ -1078,6 +1083,13 @@ body.page-host .progress-timer {
   margin: 0;
 }
 
+/* End-game unlock: the button stays hidden/disabled until 1st place is
+ * revealed (host.js renderPodium). The explicit display:none is needed
+ * because .player-button's display would beat the UA [hidden] rule. */
+body.page-host #end-game[hidden] {
+  display: none;
+}
+
 /* Small Answered X/Y pill (counts from the sanitized view; server-side
  * auto-reveal closes the question — the host fallback stays the button). */
 body.page-host .answered-pill {
@@ -1248,6 +1260,21 @@ body.page-player #correct-answer {
 
 body.page-player .rank-line {
   font-size: clamp(1.5rem, 1.2rem + 2.6vw, 2.5rem);
+  /* Rank copy is a normal phrase with spaces: wrap at word boundaries,
+   * never mid-word (mobile UI fix — 'words are broke in the middle'). */
+  overflow-wrap: normal;
+}
+
+/* The player's #podium is the Game-over CARD (the host's pillar styles are
+ * scoped to #view-podium, so they never touch this page) — keep it a plain
+ * stacked, centered card: no flex row, no bottom alignment, no clipping on
+ * narrow portrait phones; long tokens still break rather than overflow. */
+body.page-player #podium h1 {
+  text-align: center;
+}
+
+body.page-player #podium .rank-line {
+  text-align: center;
 }
 
 body.page-player .score-big {

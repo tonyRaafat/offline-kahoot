@@ -33,6 +33,7 @@ describe('stateView', () => {
       ],
       scores: { p1: 100 },
       leaderboard: [],
+      podiumRevealed: 0,
       currentQuestion: null,
     });
   });
@@ -134,5 +135,27 @@ describe('stateView', () => {
     expect(stateView(state).currentQuestion).toBeNull();
     // The engine-computed leaderboard ordering is passed through.
     expect(stateView(state).leaderboard).toEqual(['p1']);
+  });
+
+  it('projects the podium click-reveal step so host and players stay in sync', () => {
+    const base = createInitialGame({
+      title: 'Podium Test',
+      questions: [
+        { prompt: 'q?', type: 'true-false', timeSeconds: 5, options: ['a', 'b'], correctIndex: 1 },
+      ],
+    });
+    const state = {
+      ...base,
+      phase: 'podium' as const,
+      scores: { p1: 800, p2: 600, p3: 0 },
+      leaderboard: ['p1', 'p2', 'p3'],
+      podiumRevealed: 2, // click 2: 1st and 2nd up, 1st place still hidden
+    };
+    const view = stateView(state);
+    expect(view.podiumRevealed).toBe(2);
+    expect(view.phase).toBe('podium');
+    // The step count carries no ordering detail beyond its own value; the
+    // leaderboard itself is already public on the wire (no ranks leak here).
+    expect(JSON.stringify(view)).not.toContain('rowCount');
   });
 });

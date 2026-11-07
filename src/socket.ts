@@ -25,6 +25,9 @@
 //                                answered the live question, using the exact
 //                                same reveal construction)
 //     `next` (no payload)        host only: reveal -> leaderboard -> next question / podium
+//     `podiumReveal` (no payload) host only: advances the podium click-reveal
+//                                one step (3rd -> 2nd -> 1st, capped at the
+//                                podium size); no-op once fully revealed
 //     `endGame` (no payload)     host only: any live phase -> lobby (players kept,
 //                                scores cleared); results of the live game are saved
 //   server -> socket:
@@ -128,6 +131,7 @@ export function wireSockets(io: Server, wiring: SocketWiring): void {
     });
     socket.on('reveal', () => handleHostEvent(io, wiring, socket, 'reveal', onReveal));
     socket.on('next', () => handleHostEvent(io, wiring, socket, 'next', onReveal));
+    socket.on('podiumReveal', () => handleHostEvent(io, wiring, socket, 'podiumReveal', onReveal));
     socket.on('endGame', () => handleEndGame(io, wiring, socket, onReveal));
   });
 }
@@ -203,14 +207,16 @@ function handleHostEvent(
   io: Server,
   wiring: SocketWiring,
   socket: Socket,
-  event: 'reveal' | 'next',
+  event: 'reveal' | 'next' | 'podiumReveal',
   onReveal?: (reveal: Reveal) => void,
 ): void {
   if (!isHost(socket)) return;
   const wireEvent =
     event === 'reveal'
       ? ({ type: 'reveal' } as const)
-      : ({ type: 'next', atMs: Date.now() } as const);
+      : event === 'next'
+        ? ({ type: 'next', atMs: Date.now() } as const)
+        : ({ type: 'podiumReveal' } as const);
   broadcastEffects(io, socket, wiring, wiring.gameSession.dispatch(wireEvent), onReveal);
 }
 

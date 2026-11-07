@@ -34,6 +34,11 @@ export interface StateView {
   scores: Record<string, number>;
   /** Player ids score desc / early-correct tiebreak / id asc, from the engine. */
   leaderboard: string[];
+  /** Podium click-reveal progress (ranks revealed lowest-first). Meaningful
+   *  during the podium phase only; host and players get the SAME value so the
+   *  reveal step stays in sync everywhere. No ranks/answers leak — the
+   *  ordering itself is only 'how many are shown'. */
+  podiumRevealed: number;
   /** Server-sanitized snapshot of the live question; null in every other phase. */
   currentQuestion: CurrentQuestionView | null;
 }
@@ -61,6 +66,7 @@ export function stateView(state: GameState): StateView {
     players: state.players.map((p) => ({ id: p.id, name: p.name, color: p.color })),
     scores: { ...state.scores },
     leaderboard: [...state.leaderboard],
+    podiumRevealed: state.podiumRevealed,
     currentQuestion,
   };
 }

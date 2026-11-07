@@ -148,10 +148,9 @@ function nameOf(names, playerId, fallback = '?') {
  *  switch (which must re-render the current screen). */
 function dispatchView(view) {
   // ux-04: in-flight animations cancel (never queue) when the game moves on.
-  // A new phase replaces any leaderboard count-up/FLIP or podium suspense
-  // before its own render, so host controls are never blocked by animation.
+  // A new phase replaces any leaderboard count-up/FLIP before its own render,
+  // so host controls are never blocked by animation.
   if (view.phase !== 'leaderboard') cancelLeaderboardAnim();
-  if (view.phase !== 'podium') cancelPodiumAnim();
   switch (view.phase) {
     case 'lobby':
       renderLobby(view);
@@ -178,7 +177,9 @@ function dispatchView(view) {
       stopCountdown();
       const enteringPodium = currentPhase !== 'podium';
       show('podium');
-      endGameButton.disabled = false;
+      // The End-game control stays hidden/disabled until the synced reveal
+      // step says the 1st place is up (renderPodium decides below).
+      endGameButton.hidden = true;
       renderPodium(view, playersById(view), enteringPodium);
       break;
     }
@@ -295,7 +296,6 @@ function motionMs(token) {
   return Number.isFinite(ms) && ms > 0 ? ms : 0;
 }
 
-const PODIUM_STEP_MS = 1200;    // suspense pace: one rank revealed per step
 const LB_ENTER_STAGGER_MS = 70; // first-visit row stagger
 const LB_DELTA_MS = 2400;       // rank-change chip stays lit this long
 
@@ -402,10 +402,11 @@ function cancelLeaderboardAnim() {
   cancel();
 }
 
-/** Resets the count-up memory between games (renderLobby). */
+/** Resets the count-up memory between games (renderLobby). The podium rows
+ *  are rebuilt blank from the synced step on entry, so no podium anim state
+ *  survives here either. */
 function resetScoreboardAnim() {
   cancelLeaderboardAnim();
-  cancelPodiumAnim();
   lbShown.clear();
   lbOrder = [];
   lbLastSig = null;
@@ -563,82 +564,87 @@ function renderLeaderboard(view, names, entering) {
   lbOrder = rows.map((row) => row.playerId);
 }
 
-// ---- Podium: reverse-suspense reveal of the top 3 ----
+// ---- Podium: click-revealed top 3, synced with players via StateView ----
 
-let podiumAnim = null; // in-flight suspense handle: { cancel() }
-
-function cancelPodiumAnim() {
-  if (podiumAnim === null) return;
-  const { cancel } = podiumAnim;
-  podiumAnim = null;
-  cancel();
-}
-
-/** Renders the podium (top 3). During a genuine phase entry it plays the
- *  reverse suspense: 3rd → 2nd → 1st, 1st revealed last with the winner
- *  celebration. Re-renders (language switch) and reduced motion jump
- *  straight to the final podium. */
+/** Renders the podium (top 3) from the server's synced reveal progress
+ *  (StateView.podiumRevealed): the podium ENTERS fully blank (dashed skeleton
+ *  slots, no names/scores/ranks anywhere) and the host advances the reveal
+ *  one rank per click (lowest-first: 3rd → 2nd → 1st; the 1st-place reveal
+ *  gets the winner celebration). Every state push carries the same step, so
+ *  players and a rejoining/resuming host land on the current step instead of
+ *  restarting. Re-renders (language switch, re-sent state) only add classes
+ *  that are missing — already-revealed ranks never re-animate.
+ *  There are NO reveal timers left: clicking is the only pace. */
 function renderPodium(view, names, entering) {
-  cancelPodiumAnim();
   const rows = view.leaderboard.slice(0, 3).map((playerId, index) => ({
     playerId,
     rank: index + 1,
     score: view.scores[playerId] ?? 0,
   }));
   const records = reconcileScoredRows(podiumEl, 'podium-', rows);
+  const revealedCount = Math.max(0, Math.min(view.podiumRevealed ?? 0, rows.length));
   if (entering) {
-    // Fresh suspense on a phase entry: strip any ceremony leftover from a
-    // previous game's podium render, then mask every rank. Unrevealed ranks
-    // are hidden by .podium-slot (dashed skeleton, visibility-masked
-    // children) and their content is written at reveal time — either way the
-    // row skeleton never changes, so reveals are + pops, never re-layout.
+    // Fresh phase entry starts blank no matter how the state was reached:
+    // mask every row (unrevealed ranks are hidden by .podium-slot — dashed
+    // skeleton, visibility-masked children) and wipe any ceremony leftover
+    // from a previous game's podium render. Content is written at reveal
+    // time, so the reveal is an unmask, never a re-layout.
     for (const record of records) {
       record.li.classList.remove('podium-reveal', 'podium-winner');
       record.li.classList.add('podium-slot');
+      record.rankEl.className = 'row-rank';
+      record.rankEl.textContent = '';
+      record.avatarEl.replaceChildren();
+      record.nameEl.textContent = '';
+      record.scoreEl.textContent = '';
     }
   }
-  const reveal = (i, celebrate) => {
+  // Apply the synced step lowest-rank-first: click k reveals index (n - k),
+  // so with n>1 the last click lands on the 1st-place row (index 0) with the
+  // winner celebration. With 1 player a single click reveals 1st place.
+  for (let step = 1; step <= revealedCount; step++) {
+    const i = rows.length - step;
     const record = records[i];
-    if (!record) return;
+    if (!record) continue;
+    const fresh = !record.li.classList.contains('podium-reveal');
     record.li.classList.remove('podium-slot');
-    if (!record.li.classList.contains('podium-reveal')) record.li.classList.add('podium-reveal');
-    if (celebrate && !record.li.classList.contains('podium-winner')) {
-      record.li.classList.add('podium-winner');
+    if (fresh) {
+      record.li.classList.add('podium-reveal');
+      if (i === 0 && !record.li.classList.contains('podium-winner')) {
+        record.li.classList.add('podium-winner');
+      }
     }
     const row = rows[i];
     fillScoredRow(record, names, row.playerId, row.rank, row.score);
     lbShown.set(row.playerId, row.score);
-  };
-  const finishAll = () => rows.forEach((_, i) => reveal(i, i === 0));
-  if (!entering || reducedMotion()) {
-    finishAll();
-    return;
   }
-  reveal(rows.length - 1, false); // 3rd place, immediately
-  const timers = [];
-  const handle = { cancel };
-  function cancel() {
-    if (podiumAnim === handle) podiumAnim = null;
-    for (const id of timers) clearTimeout(id);
-    finishAll(); // skip = land on the final podium (any in-flight step aborts)
-  }
-  podiumAnim = handle;
-  if (rows.length > 1) {
-    timers.push(setTimeout(() => reveal(rows.length - 2, false), PODIUM_STEP_MS));
-  }
-  timers.push(setTimeout(() => reveal(0, true), PODIUM_STEP_MS * 2)); // 1st + celebration
-  timers.push(
-    setTimeout(() => {
-      if (podiumAnim === handle) podiumAnim = null;
-    }, PODIUM_STEP_MS * 2 + 300),
-  );
+  // The End-game control unlocks only once 1st place is up; later clicks do
+  // nothing (the server caps the step, the click handler stops emitting).
+  const fullyRevealed = revealedCount >= rows.length;
+  endGameButton.hidden = !fullyRevealed;
+  endGameButton.disabled = !fullyRevealed;
 }
 
-// Clicking anywhere on the podium card skips the suspense to the final
-// reveal (ux-04). The Back-to-dashboard button share this listener; cancel
-// finalizes the podium first, then the button's own handler runs.
-document.getElementById('view-podium').addEventListener('click', () => {
-  cancelPodiumAnim();
+/** The synced reveal step of the latest podium view; null while the podium
+ *  is not the current phase and -1 shorthand for "fully revealed, nothing
+ *  left to click" (server caps the step either way, this just avoids the
+ *  emit). */
+function podiumRevealStep() {
+  if (latestView?.phase !== 'podium') return null;
+  const slots = Math.min(3, latestView.leaderboard.length);
+  const revealed = Math.max(0, Math.min(latestView.podiumRevealed ?? 0, slots));
+  return revealed >= slots ? -1 : revealed;
+}
+
+// Clicking anywhere on the podium card emits ONE reveal step (server-capped,
+// so extra clicks no-op). The End-game button owns its own click: excluded
+// here by target, so revealing never advances AND a button press never ends
+// up counted as a reveal from one gesture.
+document.getElementById('view-podium').addEventListener('click', (event) => {
+  if (event.target.closest('#end-game')) return;
+  const revealed = podiumRevealStep();
+  if (revealed === null || revealed === -1) return;
+  socket.emit('podiumReveal');
 });
 
 socket.on('connect', () => {
@@ -712,9 +718,6 @@ leaderboardNextButton.addEventListener('click', () => {
 // html.leaving fade); reduced motion collapses it to an instant swap.
 endGameButton.addEventListener('click', () => {
   endGameButton.disabled = true;
-  // ux-04: abort the podium suspense cleanly on the way out (the confirming
-  // lobby `state` would also cancel it via dispatchView — this is the belt).
-  cancelPodiumAnim();
   leaveToDashboard = true;
   socket.emit('endGame');
 });

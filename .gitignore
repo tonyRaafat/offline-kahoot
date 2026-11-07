@@ -6,3 +6,4 @@ dist/
 data/results/
 data/quizzes/*.json
 !data/quizzes/seed.json
+.scratch

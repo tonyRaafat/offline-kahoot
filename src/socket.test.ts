@@ -123,6 +123,8 @@ interface StateViewPayload {
   players: Array<{ id: string; name: string; color: string }>;
   scores: Record<string, number>;
   leaderboard: string[];
+  /** Podium click-reveal progress (ranks revealed lowest-first). */
+  podiumRevealed: number;
   currentQuestion: {
     questionIndex: number;
     prompt: string;
@@ -453,6 +455,8 @@ describe('question cycle socket contract', () => {
       expect(pod.phase).toBe('podium');
       expect(pod.currentQuestion).toBeNull();
       expect(pod.leaderboard).toEqual(expect.arrayContaining([id1, id2]));
+      // Click-reveal contract: the podium NEVER broadcasts pre-revealed ranks.
+      expect(pod.podiumRevealed).toBe(0);
     } finally {
       await teardownBoot(boot);
     }
@@ -480,6 +484,74 @@ describe('question cycle socket contract', () => {
 
       expect(sawState).toBe(0);
       expect(sawReveal).toBe(0);
+    } finally {
+      await teardownBoot(boot);
+    }
+  });
+
+  it('podiumReveal: host click advances one synced step per click, capped; non-host clicks no-op', async () => {
+    const boot = await bootQuizServer(ONE_ROUND_QUIZ);
+    try {
+      const host = openAt(boot.baseUrl, { auth: true });
+      host.emit('host');
+      const p1 = openAt(boot.baseUrl);
+      const p2 = openAt(boot.baseUrl);
+      // Both players answer the single round correctly -> auto-reveal -> podium.
+      const joinDrain = nextBatch<StateViewPayload>(host, 'state', 2);
+      await joinPlayer(p1, 'Ada');
+      await joinPlayer(p2, 'Bob');
+      await joinDrain;
+      // Three states in order: the question broadcast, p1's mid-question
+      // update, then the auto-reveal closing the roster (p2's answer).
+      const answerStates = nextBatch<StateViewPayload>(host, 'state', 3);
+      host.emit('hostStart');
+      p1.emit('answer', { answerIndex: 0 });
+      p2.emit('answer', { answerIndex: 0 });
+      const [questionState, midState, revealState] = await answerStates;
+      expect(questionState.phase).toBe('question');
+      expect(midState.phase).toBe('question');
+      expect(revealState.phase).toBe('reveal');
+
+      const lbBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('next');
+      expect((await lbBatch)[0].phase).toBe('leaderboard');
+
+      const podiumBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('next');
+      const [pod] = await podiumBatch;
+      expect(pod.phase).toBe('podium');
+      expect(pod.podiumRevealed).toBe(0);
+      expect(pod.leaderboard).toHaveLength(2); // 2-player podium: cap is 2
+
+      // Player clicks are host-gated like reveal/next: nothing broadcasts.
+      let sawState = 0;
+      host.on('state', () => sawState++);
+      p1.emit('podiumReveal');
+      await delay(100);
+      expect(sawState).toBe(0);
+
+      const step1Batch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('podiumReveal'); // click 1: 2nd place (lowest rank first)
+      const [step1] = await step1Batch;
+      expect(step1.podiumRevealed).toBe(1);
+
+      const step2Batch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('podiumReveal'); // click 2: 1st place
+      const [step2] = await step2Batch;
+      expect(step2.podiumRevealed).toBe(2);
+
+      // Fully revealed: later clicks are silent (server caps the step).
+      let moreStates = 0;
+      host.on('state', () => moreStates++);
+      host.emit('podiumReveal');
+      host.emit('podiumReveal');
+      await delay(100);
+      expect(moreStates).toBe(0);
+
+      // endGame keeps working from a fully revealed podium.
+      const lobbyBatch = nextBatch<StateViewPayload>(host, 'state', 1);
+      host.emit('endGame');
+      expect((await lobbyBatch)[0].phase).toBe('lobby');
     } finally {
       await teardownBoot(boot);
     }
