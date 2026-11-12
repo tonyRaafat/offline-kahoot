@@ -104,6 +104,26 @@ export interface Reveal {
   results: RevealResult[];
 }
 
+/**
+ * Kahoot scoring:
+ * - Responses in under 0.5s (< 500ms) bypass speed reduction and get max 1000 pts.
+ * - Responses between 0.5s and deadline scale linearly from 1000 down to 500 pts:
+ *     round((1 - ((responseTime / questionTimer) / 2)) * 1000)
+ * - Responses after deadline (hidden window) get 0 pts.
+ * - Incorrect answers get 0 pts.
+ */
+export function calculatePoints(
+  correct: boolean,
+  responseTimeMs: number,
+  totalMs: number,
+  isLate: boolean,
+): number {
+  if (!correct || isLate) return 0;
+  if (responseTimeMs < 500) return 1000;
+  const ratio = responseTimeMs / totalMs;
+  return Math.max(0, Math.round((1 - ratio / 2) * 1000));
+}
+
 export type Effect =
   /** Full state push to host and players. */
   | { type: 'broadcastState'; state: GameState }
@@ -235,13 +255,15 @@ export function reduce(
           ],
         };
       }
-      // Hidden scoring window: past the deadline the remaining time goes
-      // negative, so the clamped time-weighted score lands at exactly 0 —
-      // the answer still counts as answered (and can trigger the reveal).
+      // Hidden scoring window: past the deadline points fall to 0, but the
+      // answer is still accepted so the question can auto-reveal.
       const totalMs = question.timeSeconds * 1000;
-      const remainingMs = Math.max(0, (state.timerDeadline ?? event.atMs) - event.atMs);
+      const deadline = state.timerDeadline ?? event.atMs;
+      const isLate = event.atMs > deadline;
+      const startTimeMs = deadline - totalMs;
+      const responseTimeMs = Math.max(0, event.atMs - startTimeMs);
       const correct = event.answerIndex === question.correctIndex;
-      const points = correct ? Math.max(0, Math.round((1000 * remainingMs) / totalMs)) : 0;
+      const points = calculatePoints(correct, responseTimeMs, totalMs, isLate);
       const scores: Record<string, number> = {
         ...state.scores,
         [event.playerId]: (state.scores[event.playerId] ?? 0) + points,

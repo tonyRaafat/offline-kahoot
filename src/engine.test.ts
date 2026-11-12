@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculatePoints,
   createInitialGame,
   reduce,
   type GameState,
@@ -29,8 +30,9 @@ const QUIZ: Quiz = {
   ],
 };
 
-// 3s question -> totalMs = 3000. Answer 2255ms in leaves 745ms:
-// round(1000 * 745 / 3000) = round(248.33) = 248.
+// 3s question -> totalMs = 3000. Answer 2255ms in:
+// ratio = 2255 / 3000 = 0.751666... -> ratio / 2 = 0.375833... -> 1 - 0.375833... = 0.624166...
+// round(1000 * 0.624166...) = round(624.166...) = 624.
 const QUICK_MATHS: Quiz = {
   title: 'Rounding',
   questions: [
@@ -164,9 +166,37 @@ describe('startQuiz', () => {
   });
 });
 
+describe('calculatePoints', () => {
+  it('gives 0 points if the answer is incorrect', () => {
+    expect(calculatePoints(false, 100, 10000, false)).toBe(0);
+  });
+
+  it('gives 0 points if the answer is submitted past the deadline (hidden scoring window)', () => {
+    expect(calculatePoints(true, 10001, 10000, true)).toBe(0);
+  });
+
+  it('awards maximum 1000 points if answered under 0.5 seconds (< 500ms)', () => {
+    expect(calculatePoints(true, 0, 10000, false)).toBe(1000);
+    expect(calculatePoints(true, 250, 10000, false)).toBe(1000);
+    expect(calculatePoints(true, 499, 10000, false)).toBe(1000);
+  });
+
+  it('matches the Kahoot worked example: 2s into 30s question awards 967 points', () => {
+    // 2 / 30 = 0.06666... -> / 2 = 0.03333... -> 1 - 0.03333... = 0.96666...
+    // 1000 * 0.96666... = 966.666... -> round = 967
+    expect(calculatePoints(true, 2000, 30000, false)).toBe(967);
+  });
+
+  it('awards 500 points at the exact deadline (minimum on-time score for correct)', () => {
+    // 10000 / 10000 = 1 -> 1 - 0.5 = 0.5 -> 500
+    expect(calculatePoints(true, 10000, 10000, false)).toBe(500);
+  });
+});
+
 describe('playerAnswer', () => {
-  it('scores a correct answer round(1000 x remainingMs / totalMs)', () => {
-    // Answered 2000ms into a 10000ms question: round(1000 * 8000 / 10000) = 800.
+  it('scores a correct answer using Kahoot formula round((1 - ((responseTime / totalMs) / 2)) * 1000)', () => {
+    // Answered 2000ms into a 10000ms question:
+    // 2000/10000 = 0.2 -> 0.2/2 = 0.1 -> 1 - 0.1 = 0.9 -> round(1000 * 0.9) = 900.
     // p2 never answers so the question stays open (no auto-reveal yet).
     const state = start(lobbyWith(QUIZ, [['p1', 'Alice'], ['p2', 'Bob']]));
     const { state: after, effects } = reduce(state, {
@@ -175,15 +205,30 @@ describe('playerAnswer', () => {
       answerIndex: 1,
       atMs: 1_002_000,
     });
-    expect(after.scores).toEqual({ p1: 800 });
+    expect(after.scores).toEqual({ p1: 900 });
     expect(after.answers).toEqual({
-      p1: { answerIndex: 1, atMs: 1_002_000, correct: true, points: 800 },
+      p1: { answerIndex: 1, atMs: 1_002_000, correct: true, points: 900 },
     });
     expect(effects).toEqual([{ type: 'broadcastState', state: after }]);
   });
 
+  it('scores an answer under 0.5 seconds as 1000 (speed reduction bypassed)', () => {
+    // Answered 400ms into the question (< 500ms): receives maximum 1000.
+    const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
+    const { state: after } = reduce(state, {
+      type: 'playerAnswer',
+      playerId: 'p1',
+      answerIndex: 1,
+      atMs: START_AT + 400,
+    });
+    expect(after.scores).toEqual({ p1: 1000 });
+    expect(after.answers).toEqual({
+      p1: { answerIndex: 1, atMs: START_AT + 400, correct: true, points: 1000 },
+    });
+  });
+
   it('scores a full-time instant answer as 1000 (boundary)', () => {
-    // Answered at the exact start: remainingMs == totalMs -> round(1000 * 10000/10000) = 1000.
+    // Answered at the exact start: responseTime 0ms < 500ms -> 1000.
     const state = start(lobbyWith(QUIZ, [['p1', 'Alice']]));
     const { state: after } = reduce(state, {
       type: 'playerAnswer',
@@ -197,7 +242,7 @@ describe('playerAnswer', () => {
     });
   });
 
-  it('rounds fractional scores (worked example: 248)', () => {
+  it('rounds fractional scores (worked example: 624)', () => {
     const state = start(lobbyWith(QUICK_MATHS, [['p1', 'Ann']]));
     const { state: after } = reduce(state, {
       type: 'playerAnswer',
@@ -205,7 +250,7 @@ describe('playerAnswer', () => {
       answerIndex: 1,
       atMs: 1_002_255,
     });
-    expect(after.scores).toEqual({ p1: 248 });
+    expect(after.scores).toEqual({ p1: 624 });
   });
 
   it('gives 0 points for a wrong answer and applies no penalty', () => {
@@ -222,7 +267,9 @@ describe('playerAnswer', () => {
     });
   });
 
-  it('accepts an answer submitted exactly at the deadline with 0 points', () => {
+  it('accepts an answer submitted exactly at the deadline with 500 points (minimum on-time score)', () => {
+    // Answered at Q1_DEADLINE (10s elapsed on 10s question):
+    // 10/10 = 1 -> 1 - 0.5 = 0.5 -> round(1000 * 0.5) = 500 points.
     // p2 keeps the question open (no auto-reveal on p1's answer).
     const state = start(lobbyWith(QUIZ, [['p1', 'Alice'], ['p2', 'Bob']]));
     const { state: after } = reduce(state, {
@@ -235,13 +282,14 @@ describe('playerAnswer', () => {
       answerIndex: 1,
       atMs: Q1_DEADLINE,
       correct: true,
-      points: 0,
+      points: 500,
     });
+    expect(after.scores).toEqual({ p1: 500 });
   });
 
   it('accepts a late answer with 0 points (hidden scoring window)', () => {
-    // Past the deadline the remaining time is clamped to 0, so a correct
-    // answer still locks in but scores nothing. p2 keeps the question open.
+    // Past the deadline is late, so a correct answer still locks in but scores 0.
+    // p2 keeps the question open.
     const state = start(lobbyWith(QUIZ, [['p1', 'Alice'], ['p2', 'Bob']]));
     const { state: after, effects } = reduce(state, {
       type: 'playerAnswer',
@@ -355,7 +403,7 @@ describe('reveal', () => {
           questionIndex: 0,
           correctIndex: 1,
           results: [
-            { playerId: 'p1', answerIndex: 1, correct: true, points: 800 },
+            { playerId: 'p1', answerIndex: 1, correct: true, points: 900 },
             { playerId: 'p2', answerIndex: 0, correct: false, points: 0 },
             { playerId: 'p3', answerIndex: null, correct: false, points: 0 },
           ],
@@ -389,7 +437,7 @@ describe('auto-reveal (every joined player answered)', () => {
     }).state;
     // p1 alone: the question is still live.
     expect(state.phase).toBe('question');
-    expect(state.scores).toEqual({ p1: 800 });
+    expect(state.scores).toEqual({ p1: 900 });
 
     // p2's answer completes the roster: question -> reveal, with scoring
     // already applied per answer. Same construction as the manual reveal.
@@ -401,7 +449,7 @@ describe('auto-reveal (every joined player answered)', () => {
     });
     expect(after.phase).toBe('reveal');
     expect(after.answers).toEqual({
-      p1: { answerIndex: 1, atMs: 1_002_000, correct: true, points: 800 },
+      p1: { answerIndex: 1, atMs: 1_002_000, correct: true, points: 900 },
       p2: { answerIndex: 0, atMs: 1_003_000, correct: false, points: 0 },
     });
     expect(effects).toEqual([
@@ -411,7 +459,7 @@ describe('auto-reveal (every joined player answered)', () => {
           questionIndex: 0,
           correctIndex: 1,
           results: [
-            { playerId: 'p1', answerIndex: 1, correct: true, points: 800 },
+            { playerId: 'p1', answerIndex: 1, correct: true, points: 900 },
             { playerId: 'p2', answerIndex: 0, correct: false, points: 0 },
           ],
         },
@@ -434,7 +482,7 @@ describe('auto-reveal (every joined player answered)', () => {
       atMs: 1_002_000,
     });
     expect(after.phase).toBe('question');
-    expect(after.scores).toEqual({ p1: 800 });
+    expect(after.scores).toEqual({ p1: 900 });
   });
 
   it("is the manual reveal's fallback: a reveal after the auto-reveal is a no-op", () => {
@@ -481,10 +529,10 @@ describe('auto-reveal (every joined player answered)', () => {
 });
 
 describe('next, leaderboard, podium', () => {
-  // p1 answers Q1 correctly at 2000ms  -> round(1000 * 8000 / 10000) = 800
-  // p2 answers Q1 correctly at 2001ms  -> round(1000 * 7999 / 10000) = = 800
+  // p1 answers Q1 correctly at 2000ms  -> 2000/10000 = 0.2 -> 1 - 0.1 = 0.9 -> round(1000 * 0.9) = 900
+  // p2 answers Q1 correctly at 2001ms  -> 2001/10000 = 0.2001 -> round(1000 * 0.89995) = 900
   // p3 answers nothing and p4 is wrong on both questions -> 0.
-  // p1 vs p2 tie on 800: earlier correct answer wins (2000 < 2001).
+  // p1 vs p2 tie on 900: earlier correct answer wins (2000 < 2001).
   function tieState(): GameState {
     let state = start(
       lobbyWith(QUIZ, [
@@ -569,11 +617,11 @@ describe('next, leaderboard, podium', () => {
   });
 
   it('transitions to the podium after the last question, keeping deterministic order', () => {
-    // Q1 (10s): p1 correct at 2000ms -> round(1000 * 8000 / 10000) = 800;
+    // Q1 (10s): p1 correct at 2000ms -> 2000/10000 = 0.2 -> 900;
     //           p2 never answers; p4 wrong -> 0; p3 never answers.
-    // Q2 (20s): p2 correct at 4000ms -> round(1000 * 16000 / 20000) = 800;
-    //           p1 wrong -> stays 800.
-    // Final scores tie at 800; p1's correct answer (at 2000, during Q1) is
+    // Q2 (20s): p2 correct at 4000ms -> 4000/20000 = 0.2 -> 900;
+    //           p1 wrong -> stays 900.
+    // Final scores tie at 900; p1's correct answer (at 2000, during Q1) is
     // earlier than p2's (at 4000, during Q2), so p1 ranks first.
     let state = start(
       lobbyWith(QUIZ, [
@@ -611,7 +659,7 @@ describe('next, leaderboard, podium', () => {
       atMs: 1_017_000,
     }).state;
 
-    expect(state.scores).toEqual({ p1: 800, p2: 800, p4: 0 });
+    expect(state.scores).toEqual({ p1: 900, p2: 900, p4: 0 });
 
     state = reduce(state, { type: 'reveal' }).state;
     const leaderboard = reduce(state, { type: 'next', atMs: 1_033_000 }).state;

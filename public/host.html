@@ -100,11 +100,13 @@
     </main>
 
     <main class="card card-stage" id="view-leaderboard" hidden>
-      <h1 data-i18n="host.leaderboard">Leaderboard</h1>
+      <div class="leaderboard-header">
+        <h1 data-i18n="host.leaderboard">Scoreboard</h1>
+        <button id="leaderboard-next" class="player-button leaderboard-next-btn" data-i18n="host.next">
+          Next
+        </button>
+      </div>
       <ol id="leaderboard" class="players" data-i18n-attr="aria-label:host.leaderboard"></ol>
-      <button id="leaderboard-next" class="player-button" data-i18n="host.nextQuestion">
-        Next question
-      </button>
     </main>
 
     <main class="card card-stage" id="view-podium" hidden>

@@ -52,7 +52,7 @@
       'host.answered': 'Answered',
       'host.next': 'Next',
       'host.option': 'Option {number}',
-      'host.leaderboard': 'Leaderboard',
+      'host.leaderboard': 'Scoreboard',
       'host.podium': '🏆 Podium',
       'host.backToLobby': 'Back to dashboard',
       'host.dashboard': '‹ Dashboard',

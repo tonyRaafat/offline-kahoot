@@ -1152,35 +1152,182 @@ body.page-host .correct-answer[data-answer-index] {
   box-shadow: 0 0.5rem 0 rgb(0 0 0 / 0.3);
 }
 
-/* ---- Leaderboard: taller, larger rows (fill width, grow height) ---- */
+/* ---- Leaderboard: Kahoot-style Scoreboard (host big stage) ---- */
+
+body.page-host #view-leaderboard {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  position: relative;
+}
+
+body.page-host #view-leaderboard .leaderboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  margin-bottom: clamp(1.5rem, 2vh, 3rem);
+}
+
+body.page-host #view-leaderboard h1 {
+  background: #ffffff;
+  color: #13182b;
+  font-size: clamp(1.5rem, 1.15rem + 1.4vw, 2.6rem);
+  font-weight: 800;
+  padding: clamp(0.5rem, 0.35rem + 0.5vh, 0.85rem) clamp(2.5rem, 1.8rem + 2.5vw, 5.5rem);
+  border-radius: var(--r-md);
+  margin: 0;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+body.page-host #view-leaderboard #leaderboard-next {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #ffffff;
+  color: #13182b;
+  font-weight: 800;
+  font-size: clamp(1rem, 0.9rem + 0.4vw, 1.35rem);
+  padding: clamp(0.5rem, 0.4rem + 0.5vh, 0.85rem) clamp(1.5rem, 1.1rem + 1vw, 2.5rem);
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.12), 0 4px 14px rgb(0 0 0 / 0.15);
+  transition: background-color var(--motion-fast), transform var(--motion-fast);
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+body.page-host #view-leaderboard #leaderboard-next:hover:enabled {
+  background: #f0f0f0;
+  transform: translateY(calc(-50% - 2px));
+}
+
+body.page-host #view-leaderboard #leaderboard-next:active:enabled {
+  transform: translateY(-50%);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.12);
+}
+
+body.page-host #view-leaderboard #leaderboard-next:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: translateY(-50%);
+}
+
+@media (max-width: 640px) {
+  body.page-host #view-leaderboard .leaderboard-header {
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+  body.page-host #view-leaderboard #leaderboard-next {
+    position: static;
+    transform: none;
+    order: 2;
+  }
+}
 
 body.page-host #view-leaderboard .players {
   flex: 1 1 auto;
-  gap: clamp(0.4rem, 0.3rem + 0.7vh, 0.85rem);
+  width: 100%;
+  max-width: clamp(38rem, 74vw, 72rem);
+  margin-inline: auto;
+  gap: clamp(0.55rem, 0.4rem + 0.6vh, 0.95rem);
+  display: flex;
+  flex-direction: column;
 }
 
-/* ---- Leaderboard + podium rows (host-side only) ---- */
+/* ---- Leaderboard rows: deep navy bars, perfectly aligned avatars/names/scores ---- */
 
 body.page-host #leaderboard .row {
-  min-height: clamp(3.25rem, 3rem + 2.4vh, 5.75rem);
-  padding: clamp(0.5rem, 0.4rem + 0.8vh, 1.1rem) clamp(0.75rem, 0.6rem + 1.2vw, 2rem);
-  border-radius: var(--r-lg);
-  font-size: clamp(1.25rem, 1rem + 1.9vw, 2.4rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: clamp(3.5rem, 3rem + 2vh, 5.2rem);
+  padding: clamp(0.45rem, 0.35rem + 0.5vh, 0.8rem) clamp(1rem, 0.8rem + 1.2vw, 2.2rem);
+  border-radius: var(--r-md);
+  font-size: clamp(1.3rem, 1.05rem + 1.3vw, 2.1rem);
+  font-weight: 700;
+  border: none;
+  background: #062361; /* Kahoot dark navy bar */
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 0.25);
 }
 
-body.page-host #leaderboard .row .avatar,
+/* Hide rank numbers: position in list indicates rank; avatars start cleanly aligned */
+body.page-host #leaderboard .row-rank {
+  display: none !important;
+}
+
+body.page-host #leaderboard .row .avatar {
+  width: clamp(2.5rem, 2.1rem + 1.2vw, 3.8rem);
+  height: clamp(2.5rem, 2.1rem + 1.2vw, 3.8rem);
+  font-size: clamp(1.15rem, 0.95rem + 0.8vw, 1.8rem);
+  border-radius: var(--r-md);
+  flex: 0 0 auto;
+}
+
 body.page-host #correct-players .row .avatar {
   width: clamp(2.4rem, 2rem + 2.2vw, 4.25rem);
   height: clamp(2.4rem, 2rem + 2.2vw, 4.25rem);
   font-size: clamp(1.1rem, 0.9rem + 1.2vw, 2rem);
 }
 
-body.page-host #leaderboard .row-rank {
-  font-size: clamp(1.15rem, 0.95rem + 1.4vw, 1.9rem);
+body.page-host #leaderboard .row .row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-inline-start: clamp(0.85rem, 0.6rem + 0.9vw, 1.6rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  color: #ffffff;
+  font-weight: 700;
 }
 
-body.page-host #leaderboard .row-score {
-  font-size: clamp(1.25rem, 1rem + 1.9vw, 2.4rem);
+body.page-host #leaderboard .row .row-score {
+  flex: 0 0 auto;
+  font-size: clamp(1.3rem, 1.05rem + 1.3vw, 2.1rem);
+  font-weight: 700;
+  color: #ffffff;
+  margin-inline-start: var(--sp-3);
+  font-variant-numeric: tabular-nums;
+}
+
+body.page-host #leaderboard .row .row-delta {
+  flex: 0 0 auto;
+  margin-inline-start: clamp(0.4rem, 0.35rem + 0.3vw, 0.75rem);
+  color: #ffffff;
+  font-size: 0.9em;
+}
+
+/* 1st place: crisp white bar with dark text, matching Kahoot scoreboard */
+body.page-host #leaderboard .row:first-child,
+body.page-host #leaderboard .row.rank-first {
+  background: #ffffff;
+  color: #13182b;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.25);
+}
+
+body.page-host #leaderboard .row:first-child .row-name,
+body.page-host #leaderboard .row.rank-first .row-name {
+  color: #13182b;
+  font-weight: 800;
+}
+
+body.page-host #leaderboard .row:first-child .row-score,
+body.page-host #leaderboard .row.rank-first .row-score {
+  color: #13182b;
+  font-weight: 800;
+}
+
+body.page-host #leaderboard .row:first-child .row-delta,
+body.page-host #leaderboard .row.rank-first .row-delta {
+  color: #13182b;
 }
 
 /* ---- Podium: bigger pillars + names ---- */

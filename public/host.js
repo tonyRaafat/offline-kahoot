@@ -367,6 +367,8 @@ function fillScoredRow(record, names, playerId, rank, score, scoreText) {
   record.avatarEl.replaceChildren(makeAvatar(player?.name ?? '?', player?.color));
   record.nameEl.textContent = nameOf(names, playerId);
   record.scoreEl.textContent = scoreText ?? formatScore(score);
+  record.li.classList.toggle('rank-first', rank === 1);
+  record.li.dataset.rank = String(rank);
 }
 
 /** Rank-change chip: ▲/▼ with places moved, colored by direction, then fades.

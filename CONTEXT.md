@@ -45,9 +45,10 @@ The game engine (`src/engine.ts`) is pure and is the primary unit-test seam: `re
 
 ## Scoring
 
-- correct → `round(1000 × remainingMs / totalMs)`
+- correct (< 0.5s) → 1000 (speed reduction bypassed)
+- correct (≥ 0.5s) → `round((1 - ((responseTimeMs / totalMs) / 2)) * 1000)` (scales 500–1000)
 - wrong → 0; no penalties
-- answers submitted after the timer expires are rejected
+- answers submitted after the timer expires (hidden scoring window) → accepted with 0 points
 
 ## Conventions
 
@@ -55,5 +56,5 @@ The game engine (`src/engine.ts`) is pure and is the primary unit-test seam: `re
 - Results saved per game to `data/results/YYYY-MM-DD_HHmm.json`.
 - Default port 3000, auto-increment if busy.
 - Session PIN: random 6 digits, regenerated per session.
-- Duplicate nickname → auto-suffix (`Tony` → `Tony-2`).
+- Duplicate nickname → rejected with `nameTaken` (no auto-suffixing).
 - Tickets live in `.scratch/offline-kahoot/issues/`; implement them in numeric order.

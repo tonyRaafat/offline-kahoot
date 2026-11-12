@@ -53,7 +53,7 @@ function playGameForResults(): { state: GameState; reveals: Reveal[] } {
   apply({ type: 'playerJoin', playerId: 'p1', name: 'Ada', color: 'red', atMs: 1000 });
   apply({ type: 'playerJoin', playerId: 'p2', name: 'Bob', color: 'blue', atMs: 2000 });
   apply({ type: 'startQuiz', atMs: 10_000 });
-  // Q0: Ada answers correct at halfway -> round(1000 * 5000 / 10000) = 500.
+  // Q0: Ada answers correct at halfway -> round((1 - (0.5/2)) * 1000) = 750.
   apply({ type: 'playerAnswer', playerId: 'p1', answerIndex: 1, atMs: 15_000 });
   apply({ type: 'reveal' });
   apply({ type: 'next', atMs: 20_000 }); // -> leaderboard
@@ -92,13 +92,13 @@ describe('buildResults', () => {
         { id: 'p1', name: 'Ada' },
         { id: 'p2', name: 'Bob' },
       ],
-      finalScores: { p1: 500, p2: 0 },
+      finalScores: { p1: 750, p2: 0 },
       questions: [
         {
           prompt: 'Which planet is known as the Red Planet?',
           correctIndex: 1,
           answers: [
-            { playerId: 'p1', name: 'Ada', answerIndex: 1, correct: true, points: 500 },
+            { playerId: 'p1', name: 'Ada', answerIndex: 1, correct: true, points: 750 },
             { playerId: 'p2', name: 'Bob', answerIndex: null, correct: false, points: 0 },
           ],
         },
@@ -235,7 +235,7 @@ describe('GameResultsRecorder', () => {
     const files = await readdir(dir);
     expect(files).toHaveLength(1);
     const saved = JSON.parse(await readFile(path.join(dir, files[0]), 'utf8'));
-    expect(saved.finalScores).toEqual({ p1: 500, p2: 0 });
+    expect(saved.finalScores).toEqual({ p1: 750, p2: 0 });
   });
 
   it('resets accumulation when a new game starts, so the second game saves its own file', async () => {
