@@ -202,6 +202,17 @@ function renderLobbyRoster(view) {
   );
 }
 
+const SHAPE_SVGS = [
+  // 0: Triangle (Red)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 4 L30 28 L2 28 Z"/></svg>',
+  // 1: Diamond (Blue)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 2 L30 16 L16 30 L2 16 Z"/></svg>',
+  // 2: Circle (Yellow)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="13"/></svg>',
+  // 3: Square (Green)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="4" y="4" width="24" height="24" rx="2"/></svg>',
+];
+
 function renderQuestion(question, view) {
   lastQuestion = question;
   shownQuestionIndex = question.questionIndex;
@@ -218,7 +229,16 @@ function renderQuestion(question, view) {
       button.type = 'button';
       // Answer tile color keyed by option index (tokens.css palette).
       button.dataset.answerIndex = String(answerIndex);
-      button.textContent = option;
+
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'answer-icon';
+      iconSpan.innerHTML = SHAPE_SVGS[answerIndex % SHAPE_SVGS.length];
+
+      const textSpan = document.createElement('span');
+      textSpan.className = 'answer-text';
+      textSpan.textContent = option;
+
+      button.append(iconSpan, textSpan);
       button.addEventListener('click', () => submitAnswer(answerIndex, button));
       li.append(button);
       return li;

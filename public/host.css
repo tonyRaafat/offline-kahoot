@@ -1038,51 +1038,6 @@ body.page-host .card-stage h1 {
   font-size: clamp(1.7rem, 1.05rem + 3vw, 3.75rem);
 }
 
-/* ---- Question: slim top bar (countdown pill + answered progress) ---- */
-
-body.page-host .question-topbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: clamp(0.5rem, 0.4rem + 1vw, 1.25rem);
-}
-
-body.page-host .topbar-meta {
-  margin: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--ink-muted);
-  font-weight: 700;
-  font-size: clamp(0.8rem, 0.65rem + 0.9vw, 1.2rem);
-  overflow-wrap: anywhere;
-}
-
-body.page-host .countdown-pill {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.2rem clamp(0.6rem, 0.5rem + 0.6vw, 1.1rem);
-  border-radius: var(--r-pill);
-  background: var(--surface-sunken);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-
-/* The countdown digits are a compact display inside the pill (was a 4.6rem
- * block above the answers); the pill keeps showing 0 after the window ends.
- * (Digits carry the value; the timer bar next to them drains — transform-only.) */
-body.page-host .countdown-pill .countdown {
-  margin: 0;
-  font-size: clamp(1rem, 0.75rem + 1.3vw, 1.75rem);
-  text-shadow: none;
-}
-
-body.page-host .progress-timer {
-  width: clamp(5.5rem, 4rem + 7vw, 12rem);
-  height: 0.45rem;
-  margin: 0;
-}
-
 /* End-game unlock: the button stays hidden/disabled until 1st place is
  * revealed (host.js renderPodium). The explicit display:none is needed
  * because .player-button's display would beat the UA [hidden] rule. */
@@ -1090,43 +1045,310 @@ body.page-host #end-game[hidden] {
   display: none;
 }
 
-/* Small Answered X/Y pill (counts from the sanitized view; server-side
- * auto-reveal closes the question — the host fallback stays the button). */
-body.page-host .answered-pill {
-  margin: 0;
-  flex: 0 0 auto;
-  padding: 0.25rem clamp(0.7rem, 0.55rem + 0.7vw, 1.25rem);
+/* ---- Question: authentic Kahoot stage view ---- */
+
+body.page-host #view-question {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: clamp(0.6rem, 1vh + 0.4vw, 1.4rem);
+  min-height: calc(100dvh - var(--gutter-block) - var(--gutter-block) - 8px);
+}
+
+body.page-host #view-question .question-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+body.page-host #view-question .question-meta-pill {
+  background: rgb(255 255 255 / 0.18);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
   border-radius: var(--r-pill);
-  background: var(--primary);
-  color: var(--on-primary);
-  font-size: clamp(0.8rem, 0.68rem + 0.7vw, 1.1rem);
+  padding: 0.35rem clamp(0.75rem, 1vw, 1.25rem);
+  font-weight: 700;
+  font-size: clamp(0.85rem, 0.72rem + 0.5vw, 1.15rem);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+}
+
+body.page-host #view-question #reveal.question-skip-btn {
+  background: #ffffff;
+  color: #13182b;
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.95rem, 0.85rem + 0.4vw, 1.25rem);
+  padding: clamp(0.45rem, 0.35rem + 0.5vh, 0.75rem) clamp(1.25rem, 1rem + 0.8vw, 2.2rem);
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.12), 0 4px 14px rgb(0 0 0 / 0.15);
+  transition: background-color var(--motion-fast), transform var(--motion-fast);
+  width: auto;
+  min-height: auto;
+  margin: 0;
 }
 
-/* ---- Question: the big prompt + 2x2 toast grid ---- */
-
-body.page-host #question-prompt {
-  margin: clamp(0.6rem, 0.5rem + 1.6vh, 1.75rem) 0 clamp(0.4rem, 0.4rem + 1.2vh, 1.25rem);
-  font-size: clamp(2rem, 1rem + 4.4vw, 4.75rem);
-  flex: 0 1 auto;
+body.page-host #view-question #reveal.question-skip-btn:hover:enabled {
+  background: #f0f0f0;
+  transform: translateY(-2px);
 }
 
-body.page-host #view-question .answers {
+body.page-host #view-question #reveal.question-skip-btn:active:enabled {
+  transform: translateY(0);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.12);
+}
+
+body.page-host #view-question #reveal.question-skip-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+body.page-host #view-question .question-prompt-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+body.page-host #view-question #question-prompt {
+  background: #ffffff;
+  color: #13182b;
+  font-size: clamp(1.4rem, 1rem + 1.8vw, 2.75rem);
+  font-weight: 800;
+  text-align: center;
+  padding: clamp(0.75rem, 0.5rem + 1.2vh, 1.5rem) clamp(1.5rem, 2vw, 3.5rem);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+  margin: 0;
+  width: 100%;
+  max-width: clamp(36rem, 78vw, 76rem);
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+}
+
+/* Middle stage: Circular Timer (left), Kahoot Stage graphic (center), Answers stat (right) */
+body.page-host #view-question .question-stage-middle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: clamp(38rem, 84vw, 82rem);
+  margin-inline: auto;
+  padding-inline: clamp(0.5rem, 1vw, 2rem);
   flex: 1 1 auto;
-  margin-block: clamp(0.25rem, 0.5vh, 0.6rem) clamp(0.5rem, 0.4rem + 1vh, 1rem);
-  gap: clamp(0.5rem, 0.35rem + 1.1vw, 1.4rem);
+  min-height: clamp(5rem, 14vh, 12rem);
+}
+
+body.page-host #view-question .timer-circle-wrap {
+  flex: 0 0 auto;
+}
+
+body.page-host #view-question .timer-circle {
+  position: relative;
+  width: clamp(4.6rem, 3.4rem + 3.8vw, 7.25rem);
+  height: clamp(4.6rem, 3.4rem + 3.8vw, 7.25rem);
+  border-radius: 50%;
+  background: #36116e;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.3), inset 0 0 0 2px rgb(255 255 255 / 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--motion-fast) var(--ease-spring);
+}
+
+body.page-host #view-question .timer-circle.urgent {
+  animation: timer-pulse 0.6s infinite alternate ease-in-out;
+  background: #7a1236;
+}
+
+@keyframes timer-pulse {
+  from {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(226, 27, 60, 0.6);
+  }
+  to {
+    transform: scale(1.08);
+    box-shadow: 0 0 20px 8px rgba(226, 27, 60, 0.4);
+  }
+}
+
+body.page-host #view-question .timer-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+body.page-host #view-question .timer-svg-bg {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.15);
+  stroke-width: 6;
+}
+
+body.page-host #view-question .timer-svg-progress {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s linear;
+}
+
+body.page-host #view-question .timer-circle .countdown {
+  position: relative;
+  z-index: 1;
+  color: #ffffff;
+  font-family: var(--font-display, 'Montserrat');
+  font-weight: 800;
+  font-size: clamp(1.8rem, 1.4rem + 2vw, 3.25rem);
+  line-height: 1;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
+  margin: 0;
+}
+
+body.page-host #view-question .stage-center-graphic {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.95;
+}
+
+body.page-host #view-question .kahoot-stage-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 1.25rem;
+  background: rgb(255 255 255 / 0.12);
+  backdrop-filter: blur(6px);
+  border-radius: var(--r-pill);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+}
+
+body.page-host #view-question .kahoot-stage-badge .badge-text {
+  font-family: var(--font-display, 'Montserrat');
+  font-size: clamp(1.15rem, 0.95rem + 1vw, 1.85rem);
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+body.page-host #view-question .answers-stat-wrap {
+  flex: 0 0 auto;
+}
+
+body.page-host #view-question .answers-stat-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: clamp(4.8rem, 3.6rem + 3vw, 7.25rem);
+  padding: clamp(0.35rem, 0.25rem + 0.5vh, 0.7rem) clamp(0.75rem, 0.5rem + 0.8vw, 1.5rem);
+  background: #36116e;
+  border-radius: var(--r-xl);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.3), inset 0 0 0 2px rgb(255 255 255 / 0.1);
+}
+
+body.page-host #view-question .answers-stat-badge .stat-count {
+  font-family: var(--font-display, 'Montserrat');
+  font-size: clamp(1.8rem, 1.4rem + 2vw, 3.25rem);
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
+}
+
+body.page-host #view-question .answers-stat-badge .stat-label {
+  font-size: clamp(0.72rem, 0.62rem + 0.3vw, 0.92rem);
+  font-weight: 800;
+  color: rgb(255 255 255 / 0.82);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 0.2rem;
+}
+
+/* Bottom 2x2 Answer Grid */
+body.page-host #view-question .answers {
+  flex: 0 0 auto;
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.6rem, 0.4rem + 1vw, 1.4rem);
+  width: 100%;
+  max-width: clamp(38rem, 84vw, 84rem);
+  margin-inline: auto;
+  margin-block: 0;
+  padding: 0;
+  list-style: none;
 }
 
 body.page-host #view-question .answers li[data-answer-index] {
-  justify-content: center;
-  text-align: center;
-  padding: clamp(0.6rem, 0.5rem + 1vw, 1.4rem);
-  min-height: clamp(4.5rem, 11vh, 11rem);
-  font-size: clamp(1.3rem, 0.8rem + 2.2vw, 2.75rem);
-  box-shadow: 0 0.5rem 0 rgb(0 0 0 / 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(0.75rem, 0.5rem + 1vw, 1.5rem);
+  padding: clamp(0.75rem, 0.5rem + 1.2vh, 1.5rem) clamp(1rem, 0.8rem + 1.2vw, 2.2rem);
+  min-height: clamp(4.8rem, 10vh, 8.5rem);
   border-radius: var(--r-xl);
+  overflow: hidden;
+  transition: transform var(--motion-fast) var(--ease-spring);
+}
+
+body.page-host #view-question .answers li[data-answer-index='0'] {
+  background: var(--answer-0, #e21b3c);
+  color: #ffffff;
+  box-shadow: 0 6px 0 #9e0f2a, 0 8px 20px rgb(0 0 0 / 0.2);
+}
+
+body.page-host #view-question .answers li[data-answer-index='1'] {
+  background: var(--answer-1, #1368ce);
+  color: #ffffff;
+  box-shadow: 0 6px 0 #0d468a, 0 8px 20px rgb(0 0 0 / 0.2);
+}
+
+body.page-host #view-question .answers li[data-answer-index='2'] {
+  background: #d89e00;
+  color: #ffffff;
+  box-shadow: 0 6px 0 #a37700, 0 8px 20px rgb(0 0 0 / 0.2);
+}
+
+body.page-host #view-question .answers li[data-answer-index='3'] {
+  background: var(--answer-3, #26890c);
+  color: #ffffff;
+  box-shadow: 0 6px 0 #185a07, 0 8px 20px rgb(0 0 0 / 0.2);
+}
+
+/* Shape Icon & Text */
+.answer-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: clamp(2rem, 1.4rem + 1.5vw, 3.25rem);
+  height: clamp(2rem, 1.4rem + 1.5vw, 3.25rem);
+  color: #ffffff;
+}
+
+.answer-shape {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.25));
+}
+
+.answer-text {
+  flex: 1 1 auto;
+  font-size: clamp(1.2rem, 0.85rem + 1.5vw, 2.4rem);
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.28);
+  line-height: 1.24;
+  overflow-wrap: break-word;
 }
 
 /* Trailing controls (Reveal / Next / Back) pin to the stage bottom. */
@@ -1145,11 +1367,28 @@ body.page-host .correct-answer[data-answer-index] {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: clamp(1rem, 1.5vw, 2rem);
   min-height: clamp(5.5rem, 18vh, 13rem);
   padding: clamp(1rem, 0.8rem + 1.5vw, 2.5rem);
   font-size: clamp(1.75rem, 1.1rem + 3vw, 4.25rem);
   border-radius: var(--r-xl);
   box-shadow: 0 0.5rem 0 rgb(0 0 0 / 0.3);
+}
+
+body.page-host .correct-answer[data-answer-index='2'] {
+  background: #d89e00;
+  color: #ffffff;
+}
+
+body.page-host .correct-answer .answer-icon {
+  width: clamp(2.5rem, 2rem + 2vw, 4.5rem);
+  height: clamp(2.5rem, 2rem + 2vw, 4.5rem);
+}
+
+body.page-host .correct-answer .answer-text {
+  font-size: clamp(1.75rem, 1.1rem + 3vw, 4.25rem);
+  font-weight: 800;
+  color: #ffffff;
 }
 
 /* ---- Leaderboard: Kahoot-style Scoreboard (host big stage) ---- */
@@ -1378,18 +1617,96 @@ body.page-player #question h1 {
   font-size: clamp(1.55rem, 1.2rem + 2.6vw, 2.6rem);
 }
 
-/* One answer per line: full width, comfortably tappable, no 2x2. */
+/* 2x2 grid matching Kahoot mobile answering layout */
 body.page-player #options.answers {
-  grid-template-columns: 1fr;
-  gap: clamp(0.5rem, 1.4vh, 0.8rem);
-  margin-block: clamp(0.85rem, 2vh, 1.4rem) clamp(0.85rem, 2.2vh, 1.5rem);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(0.55rem, 1.5vh, 0.9rem);
+  margin-block: clamp(0.75rem, 1.8vh, 1.25rem);
+  padding: 0;
+  list-style: none;
+}
+
+body.page-player #options li {
+  display: flex;
+  margin: 0;
+  padding: 0;
 }
 
 body.page-player #options button.answer {
-  min-height: clamp(3.5rem, 0.75rem + 7vh, 5rem);
-  padding: clamp(0.65rem, 1.4vh, 1rem) clamp(0.85rem, 2.5vw, 1.25rem);
-  font-size: clamp(1.15rem, 1.05rem + 1.1vw, 1.6rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: clamp(4.5rem, 12vh, 8rem);
+  padding: clamp(0.6rem, 1.2vh, 1rem) clamp(0.5rem, 1.5vw, 1rem);
+  border: none;
+  border-radius: var(--r-lg);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgb(0 0 0 / 0.25);
+  transition: transform var(--motion-fast) var(--ease-spring), box-shadow var(--motion-fast);
+}
+
+body.page-player #options button.answer[data-answer-index='0'] {
+  background: var(--answer-0, #e21b3c);
+  color: #ffffff;
+  box-shadow: 0 5px 0 #9e0f2a;
+}
+
+body.page-player #options button.answer[data-answer-index='1'] {
+  background: var(--answer-1, #1368ce);
+  color: #ffffff;
+  box-shadow: 0 5px 0 #0d468a;
+}
+
+body.page-player #options button.answer[data-answer-index='2'] {
+  background: #d89e00;
+  color: #ffffff;
+  box-shadow: 0 5px 0 #a37700;
+}
+
+body.page-player #options button.answer[data-answer-index='3'] {
+  background: var(--answer-3, #26890c);
+  color: #ffffff;
+  box-shadow: 0 5px 0 #185a07;
+}
+
+body.page-player #options button.answer:hover:enabled {
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+}
+
+body.page-player #options button.answer:active:enabled {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.25);
+}
+
+body.page-player #options button.answer .answer-icon {
+  width: clamp(2rem, 1.6rem + 2vw, 3rem);
+  height: clamp(2rem, 1.6rem + 2vw, 3rem);
+}
+
+body.page-player #options button.answer .answer-text {
+  font-size: clamp(0.95rem, 0.85rem + 0.6vw, 1.35rem);
   text-align: center;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+@media (max-width: 360px) {
+  body.page-player #options.answers {
+    grid-template-columns: 1fr;
+  }
+  body.page-player #options button.answer {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding-inline: 1rem;
+    min-height: 3.5rem;
+  }
 }
 
 /* Reveal + standings get a moderate bump (portrait-friendly). */

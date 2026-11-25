@@ -57,31 +57,56 @@
       </div>
     </main>
 
-    <!-- Big-stage question screen (host-big): the countdown lives in a slim
-         top bar above the question (never obstructing it), next to the live
-         Answered X/Y indicator; the question + 2x2 toast answer grid fill the
-         viewport below. -->
+    <!-- Big-stage question screen: authentic Kahoot layout with floating white
+         prompt card, circular countdown timer on the left, live answers counter
+         on the right, skip control in top-right, and 2x2 iconic geometric answer grid. -->
     <main class="card card-stage" id="view-question" hidden>
-      <div class="question-topbar">
-        <p class="topbar-meta">
+      <header class="question-header">
+        <div class="question-meta-pill">
           <span id="quiz-title"></span> —
           <span data-i18n="word.question">Question</span>
           <span id="question-number"></span>
-        </p>
-        <div class="countdown-pill">
-          <span id="countdown" class="countdown" role="status" aria-label="Seconds left"
-                data-i18n-attr="aria-label:host.timeLeft"></span>
-          <!-- Timer progress bar: drains with the countdown (fed by host.js
-               via scaleX; aria-hidden because the digits carry the value). -->
-          <div class="progress progress-timer" aria-hidden="true">
+        </div>
+        <button id="reveal" class="player-button question-skip-btn" data-i18n="host.skip">
+          Skip
+        </button>
+      </header>
+
+      <div class="question-prompt-wrap">
+        <h1 id="question-prompt"></h1>
+      </div>
+
+      <div class="question-stage-middle">
+        <div class="timer-circle-wrap">
+          <div class="timer-circle">
+            <svg class="timer-svg" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="timer-svg-bg" cx="50" cy="50" r="44" />
+              <circle id="timer-svg-progress" class="timer-svg-progress" cx="50" cy="50" r="44" />
+            </svg>
+            <span id="countdown" class="countdown" role="status" aria-label="Seconds left"
+                  data-i18n-attr="aria-label:host.timeLeft"></span>
+          </div>
+          <!-- Keep hidden progress bar so any legacy test/reference remains safe -->
+          <div class="progress progress-timer" style="display: none;" aria-hidden="true">
             <div id="timer-bar" class="progress-fill"></div>
           </div>
         </div>
-        <p id="answered-indicator" class="answered-pill" role="status" data-i18n="host.answered">Answered</p>
+
+        <div class="stage-center-graphic" aria-hidden="true">
+          <div class="kahoot-stage-badge">
+            <span class="badge-text">Kahoot!</span>
+          </div>
+        </div>
+
+        <div class="answers-stat-wrap">
+          <div id="answered-indicator" class="answers-stat-badge" role="status">
+            <span id="answered-count-num" class="stat-count">0</span>
+            <span class="stat-label" data-i18n="host.answers">Answers</span>
+          </div>
+        </div>
       </div>
-      <h1 id="question-prompt"></h1>
+
       <ol id="question-options" class="answers"></ol>
-      <button id="reveal" class="player-button" data-i18n="host.reveal">Reveal answer</button>
     </main>
 
     <main class="card card-stage" id="view-reveal" hidden>

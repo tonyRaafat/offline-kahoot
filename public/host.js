@@ -99,23 +99,63 @@ function show(phase) {
   currentPhase = phase;
 }
 
+const SHAPE_SVGS = [
+  // 0: Triangle (Red)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 4 L30 28 L2 28 Z"/></svg>',
+  // 1: Diamond (Blue)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M16 2 L30 16 L16 30 L2 16 Z"/></svg>',
+  // 2: Circle (Yellow)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="13"/></svg>',
+  // 3: Square (Green)
+  '<svg class="answer-shape" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="4" y="4" width="24" height="24" rx="2"/></svg>',
+];
+
 function stopCountdown() {
   if (countdownTimer !== null) {
     clearInterval(countdownTimer);
     countdownTimer = null;
   }
   countdownEl.textContent = '';
+  const circleProgress = document.getElementById('timer-svg-progress');
+  if (circleProgress !== null) {
+    circleProgress.style.strokeDashoffset = '0';
+  }
+  const timerCircle = document.querySelector('.timer-circle');
+  if (timerCircle) {
+    timerCircle.classList.remove('urgent');
+  }
 }
 
 function startCountdown(timerDeadline, timeSeconds = 0) {
   stopCountdown();
   const totalMs = timeSeconds > 0 ? timeSeconds * 1000 : 0;
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  const circleProgress = document.getElementById('timer-svg-progress');
+  if (circleProgress !== null) {
+    circleProgress.style.strokeDasharray = `${circumference}`;
+    circleProgress.style.strokeDashoffset = '0';
+  }
+  const timerCircle = document.querySelector('.timer-circle');
+  if (timerCircle) {
+    timerCircle.classList.remove('urgent');
+  }
+
   const tick = () => {
     // Host-big: the digits clamp at 0 and the pill keeps showing it (plus the
     // drained bar) after the window — the scoring window is hidden, the
     // fallback is the host's manual Reveal button below.
     const remainingMs = Math.max(0, timerDeadline - Date.now());
-    countdownEl.textContent = String(Math.ceil(remainingMs / 1000));
+    const secs = Math.ceil(remainingMs / 1000);
+    countdownEl.textContent = String(secs);
+
+    if (circleProgress !== null && totalMs > 0) {
+      const progress = Math.max(0, Math.min(1, remainingMs / totalMs));
+      circleProgress.style.strokeDashoffset = `${circumference * (1 - progress)}`;
+    }
+    if (timerCircle) {
+      timerCircle.classList.toggle('urgent', secs <= 5 && secs > 0);
+    }
     // Timer progress bar drains with the question window (scaleX only).
     if (timerBarEl !== null) {
       timerBarEl.style.transform = `scaleX(${totalMs > 0 ? remainingMs / totalMs : 0})`;
@@ -125,12 +165,16 @@ function startCountdown(timerDeadline, timeSeconds = 0) {
   countdownTimer = setInterval(tick, 250);
 }
 
-/** Fills the top-bar "Answered X / Y" pill from the sanitized view (counts
- *  only); every mid-question state push refreshes it. */
+/** Fills the top-bar "Answered X / Y" pill or big stat badge from the sanitized view */
 function renderAnsweredIndicator(question) {
-  if (answeredIndicatorEl === null || !question) return;
-  answeredIndicatorEl.textContent =
-    `${t('host.answered')} ${question.answeredCount} / ${question.playerCount}`;
+  if (!question) return;
+  const countEl = document.getElementById('answered-count-num');
+  if (countEl) {
+    countEl.textContent = String(question.answeredCount);
+  } else if (answeredIndicatorEl !== null) {
+    answeredIndicatorEl.textContent =
+      `${t('host.answered')} ${question.answeredCount} / ${question.playerCount}`;
+  }
 }
 
 /** Player-id -> PlayerView lookup from the roster within the current StateView. */
@@ -226,7 +270,16 @@ function renderQuestion(view) {
       const li = document.createElement('li');
       // Answer tile colors keyed by option index (tokens.css palette).
       li.dataset.answerIndex = String(answerIndex);
-      li.textContent = option;
+
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'answer-icon';
+      iconSpan.innerHTML = SHAPE_SVGS[answerIndex % SHAPE_SVGS.length];
+
+      const textSpan = document.createElement('span');
+      textSpan.className = 'answer-text';
+      textSpan.textContent = option;
+
+      li.append(iconSpan, textSpan);
       return li;
     }),
   );
@@ -245,8 +298,20 @@ function renderReveal(view) {
   } else {
     correctAnswerEl.removeAttribute('data-answer-index');
   }
-  correctAnswerEl.textContent =
+  const answerText =
     lastQuestion?.options[revealData.correctIndex] ?? t('host.option', { number: revealData.correctIndex + 1 });
+  correctAnswerEl.replaceChildren();
+  if (lastQuestion) {
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'answer-icon';
+    iconSpan.innerHTML = SHAPE_SVGS[revealData.correctIndex % SHAPE_SVGS.length];
+    const textSpan = document.createElement('span');
+    textSpan.className = 'answer-text';
+    textSpan.textContent = answerText;
+    correctAnswerEl.append(iconSpan, textSpan);
+  } else {
+    correctAnswerEl.textContent = answerText;
+  }
   // Answered meter (client-only, decision A): the reveal payload lists every
   // joined player; entries with a real answerIndex are the ones who answered.
   if (answeredBarEl !== null && answeredCountEl !== null) {
