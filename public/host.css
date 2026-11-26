@@ -1117,7 +1117,7 @@ body.page-host #view-question .question-prompt-wrap {
 body.page-host #view-question #question-prompt {
   background: #ffffff;
   color: #13182b;
-  font-size: clamp(1.4rem, 1rem + 1.8vw, 2.75rem);
+  font-size: clamp(1.75rem, 1.3rem + 2.4vw, 3.75rem);
   font-weight: 800;
   text-align: center;
   padding: clamp(0.75rem, 0.5rem + 1.2vh, 1.5rem) clamp(1.5rem, 2vw, 3.5rem);
@@ -1131,7 +1131,7 @@ body.page-host #view-question #question-prompt {
   overflow-wrap: break-word;
 }
 
-/* Middle stage: Circular Timer (left), Kahoot Stage graphic (center), Answers stat (right) */
+/* Middle stage: Circular Timer (left), Answers stat (right) */
 body.page-host #view-question .question-stage-middle {
   display: flex;
   align-items: center;
@@ -1209,34 +1209,6 @@ body.page-host #view-question .timer-circle .countdown {
   line-height: 1;
   text-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
   margin: 0;
-}
-
-body.page-host #view-question .stage-center-graphic {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.95;
-}
-
-body.page-host #view-question .kahoot-stage-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.45rem 1.25rem;
-  background: rgb(255 255 255 / 0.12);
-  backdrop-filter: blur(6px);
-  border-radius: var(--r-pill);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
-}
-
-body.page-host #view-question .kahoot-stage-badge .badge-text {
-  font-family: var(--font-display, 'Montserrat');
-  font-size: clamp(1.15rem, 0.95rem + 1vw, 1.85rem);
-  font-weight: 800;
-  color: #ffffff;
-  letter-spacing: 0.04em;
-  text-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
 }
 
 body.page-host #view-question .answers-stat-wrap {
@@ -1351,6 +1323,10 @@ body.page-host #view-question .answers li[data-answer-index='3'] {
   overflow-wrap: break-word;
 }
 
+body.page-host #view-question .answer-text {
+  font-size: clamp(1.5rem, 1.1rem + 2vw, 3.25rem);
+}
+
 /* Trailing controls (Reveal / Next / Back) pin to the stage bottom. */
 body.page-host .card-stage > .player-button {
   flex: 0 0 auto;
@@ -1423,10 +1399,10 @@ body.page-host #view-leaderboard h1 {
 }
 
 body.page-host #view-leaderboard #leaderboard-next {
-  position: absolute;
-  inset-inline-end: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  flex: 0 0 auto;
+  align-self: center;
+  margin-block-start: auto;
+  margin-inline: auto;
   background: #ffffff;
   color: #13182b;
   font-weight: 800;
@@ -1439,35 +1415,21 @@ body.page-host #view-leaderboard #leaderboard-next {
   transition: background-color var(--motion-fast), transform var(--motion-fast);
   width: auto;
   min-height: auto;
-  margin: 0;
 }
 
 body.page-host #view-leaderboard #leaderboard-next:hover:enabled {
   background: #f0f0f0;
-  transform: translateY(calc(-50% - 2px));
+  transform: translateY(-2px);
 }
 
 body.page-host #view-leaderboard #leaderboard-next:active:enabled {
-  transform: translateY(-50%);
+  transform: translateY(0);
   box-shadow: 0 1px 0 rgb(0 0 0 / 0.12);
 }
 
 body.page-host #view-leaderboard #leaderboard-next:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  transform: translateY(-50%);
-}
-
-@media (max-width: 640px) {
-  body.page-host #view-leaderboard .leaderboard-header {
-    flex-wrap: wrap;
-    gap: var(--sp-2);
-  }
-  body.page-host #view-leaderboard #leaderboard-next {
-    position: static;
-    transform: none;
-    order: 2;
-  }
 }
 
 body.page-host #view-leaderboard .players {

@@ -1,0 +1,131 @@
+{
+  "title": "الصوره الزاتيه",
+  "questions": [
+    {
+      "prompt": "هل الناس بتتاثر برأي بعض",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "prompt": "خلق الله إبليس كائناً شريراً بطبعه منذ اللحظة الأولى لخلقه",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 1
+    },
+    {
+      "prompt": "الهروب من التجربه ضعف",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 1
+    },
+    {
+      "prompt": "المنطقة العمياء دي حاجات أنا مش عارفاها عني لكن الناس عارفاها",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "prompt": "الناس غالباً بتحكم علينا حسب إيه",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "اللي شايفينه من بره",
+        "اللي جوانا ونوايانا الحقيقية",
+        "رأي ربنا فينا",
+        "مواهبنا المستخبية"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "prompt": "يُعتبر كلمة الله المتجسد هو الوحيد القادر على فداء الإنسان وتجديد صورته الأولى لأنه الخالق غير المحدود والخالي تماماً من الخطية",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "prompt": "الطهارة معناها إني محسّش بأي مشاعر",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 1
+    },
+    {
+      "prompt": "عشان موهبتي تكبر لازم أعمل إيه",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "أسيبها وهي هتكبر لوحدها",
+        "خبيها ومقولش لحد عليها عشان الحسد",
+        "أقارن نفسي بالناس و اشوف انا احسن منهم ولا لأ",
+        "أنمّيها وأطوّرها"
+      ],
+      "correctIndex": 3
+    },
+    {
+      "prompt": "ممكن ربنا يشوفنا أحسن مما إحنا شايفين نفسنا",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "prompt": "\"شاهد الآيه: \" وَكَانَ صَوْتٌ مِنَ السَّمَاوَاتِ: أَنْتَ ابْنِي الْحَبِيبُ الَّذِي بِهِ سُرِرْتُ",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "مرقس 1 : 11",
+        "مرقس 1 : 12",
+        "مرقس 1 : 13",
+        "مرقس 1 : 14"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "prompt": "لما تعرف نفسك كويس مش هتقدر تعرف ربنا",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 1
+    },
+    {
+      "prompt": "في ناس عندها مواهب و ناس معندهاش عادي",
+      "type": "multiple-choice",
+      "timeSeconds": 20,
+      "options": [
+        "صح",
+        "غلط"
+      ],
+      "correctIndex": 1
+    }
+  ]
+}
